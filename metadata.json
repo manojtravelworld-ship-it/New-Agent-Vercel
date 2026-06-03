@@ -1,0 +1,6 @@
+{
+  "name": "Nexus Justice",
+  "description": "High-level real-time legal assistant with audio conversation and document processing.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
