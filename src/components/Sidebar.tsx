@@ -13,6 +13,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) =
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
       </svg>
     ), label: 'Command' },
+    { id: 'tele-prompt', icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6h6M9 10h6M11 14h2" />
+      </svg>
+    ), label: 'Tele Prompt' },
     { id: 'interaction-feed', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -28,6 +34,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) =
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
       </svg>
     ), label: 'Drafting' },
+    { id: 'contract', icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ), label: 'Contract' },
     { id: 'convert', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -74,13 +85,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) =
         <span className="text-2xl font-black text-black italic">T</span>
       </div>
 
-      {/* Nav Items */}
-      <div className="flex-1 flex flex-col gap-4">
+      {/* Nav Items Scrollable Container with Custom Thin Blue Slide Bar */}
+      <div className="flex-1 w-full overflow-y-auto sidebar-scrollbar flex flex-col items-center gap-4 px-2 min-h-0 select-none">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onViewChange(item.id)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 group relative ${
+            className={`w-12 h-12 rounded-2xl flex flex-shrink-0 items-center justify-center transition-all duration-300 group relative ${
               currentView === item.id 
                 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-inner' 
                 : 'text-slate-600 hover:text-slate-300 hover:bg-white/5'
@@ -94,19 +105,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) =
           </button>
         ))}
       </div>
-
-      {/* Toolbox Trigger */}
-      <button
-        onClick={() => onViewChange('toolbox')}
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
-          currentView === 'toolbox' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-300'
-        }`}
-        title="Toolbox"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 00-1 1v1a2 2 0 11-4 0v-1a1 1 0 00-1-1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-        </svg>
-      </button>
     </div>
   );
 };

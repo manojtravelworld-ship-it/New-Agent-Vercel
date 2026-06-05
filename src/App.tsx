@@ -7,15 +7,53 @@ import { ConnectionStatus } from './types';
 import { jsPDF } from 'jspdf';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
-import { Copy, Check, Trash2, Download, Maximize2, Minimize2, RotateCcw, Zap, BookOpen, ChevronRight, AlertTriangle, AlertCircle, Info, Send, Anchor, Plus, X, Camera, Globe, Search, FileText, File, CheckCircle, Upload, Cpu, Mic } from 'lucide-react';
+import { Copy, Check, Trash2, Download, Maximize2, Minimize2, RotateCcw, Zap, BookOpen, ChevronRight, AlertTriangle, AlertCircle, Info, Send, Anchor, Plus, X, Camera, Globe, Search, FileText, File, CheckCircle, Upload, Cpu, Mic, Volume2, Sparkles, User, MessageSquare, PhoneCall, Phone } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import ContractEngine from './components/ContractEngine';
+import { VoiceVisualizer } from './components/VoiceVisualizer';
 
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const FRAME_RATE = 2; 
 const JPEG_QUALITY = 0.6;
 
-type AppView = 'home' | 'reading-room' | 'toolbox' | 'command' | 'system-prompt' | 'clients' | 'consult' | 'archive' | 'interaction-feed' | 'drafting' | 'convert' | 'knowledge' | 'brain-manager';
+type AppView = 'home' | 'reading-room' | 'command' | 'tele-prompt' | 'system-prompt' | 'clients' | 'consult' | 'archive' | 'interaction-feed' | 'drafting' | 'convert' | 'knowledge' | 'brain-manager' | 'contract';
+
+interface TelePromptItem {
+  id: string;
+  caller: string;
+  instruction: string;
+  isActive: boolean;
+  note?: string;
+  createdAt: string;
+}
+
+const DEFAULT_TELE_PROMPTS: TelePromptItem[] = [
+  {
+    id: "tp-1",
+    caller: "Raju",
+    instruction: "tell him to meet me 5 'o clock",
+    isActive: true,
+    note: "Raju is the primary client for the property dispute appeal.",
+    createdAt: "2026-06-04T12:00:00Z"
+  },
+  {
+    id: "tp-2",
+    caller: "Clerk",
+    instruction: "tell him to bring A4 paper",
+    isActive: true,
+    note: "High Court clerk regarding registry stationery.",
+    createdAt: "2026-06-04T12:05:00Z"
+  },
+  {
+    id: "tp-3",
+    caller: "Landlord",
+    instruction: "Tell him lease rent check has been deposited of Rupees forty thousand and he can collect draft copy.",
+    isActive: true,
+    note: "Office rent coordination.",
+    createdAt: "2016-06-04T12:10:00Z"
+  }
+];
 
 interface ClientRecord {
   id: string;
@@ -218,6 +256,75 @@ const CONVERTER_STEPS = [
   { id: 6, title: 'Word Export', desc: 'Save as editable .docx', icon: <File size={14} />, color: '#3b82f6' },
 ];
 
+interface CallRecord {
+  id: string;
+  caller: string;
+  date: string;
+  duration: string;
+  sessionId: string;
+  summary: string;
+  transcript: { speaker: string; text: string; time: string }[];
+}
+
+const DEFAULT_CALL_RECORDS: CallRecord[] = [
+  {
+    id: 'c1',
+    caller: 'Sreedharan K.',
+    date: '16/02/2026',
+    duration: '3m 4s',
+    sessionId: 'H01',
+    summary: 'Property boundary dispute in Aluva. Neighbor is encroaching via new fence construction. Needs interim injunction against further work.',
+    transcript: [
+      { speaker: 'Sreedharan K.', text: 'Hello, Nexus Justice? I was told you have an automated legal counselor.', time: '00:02' },
+      { speaker: 'Nexus AI', text: 'Welcome to Nexus Justice, Sreedharan. I am the Voice Node Alpha. Please describe your legal issue.', time: '00:15' },
+      { speaker: 'Sreedharan K.', text: 'Yes, it is about my land in Aluva. My neighbor started building a new concrete fence yesterday.', time: '00:32' },
+      { speaker: 'Sreedharan K.', text: 'But they have encroached by more than two feet onto my surveyed property line. I showed them my title deeds, but they laughed and ignored me.', time: '00:48' },
+      { speaker: 'Nexus AI', text: 'Encroachment on surveyed boundaries is a serious infraction. Do you possess a certified survey sketch of your plot?', time: '01:12' },
+      { speaker: 'Sreedharan K.', text: 'Yes, I have the government survey sketch from last year. It clearly shows the boundary marker stones. What can we do to halt them?', time: '01:30' },
+      { speaker: 'Nexus AI', text: 'We can draft an application for a temporary injunction order to halt construction immediately, accompanied by an absolute declaration of title suit.', time: '01:50' },
+      { speaker: 'Sreedharan K.', text: 'Can we do that quickly? They are pouring concrete as we speak, and once it is set, it will be much harder to remove.', time: '02:15' },
+      { speaker: 'Nexus AI', text: 'Understood. I will bundle this record and dispatch it to our senior advocate to initiate a swift injunction petition in the local court.', time: '02:40' },
+      { speaker: 'Sreedharan K.', text: 'Thank you so much! Please initiate the draft immediately. I am ready to sign.', time: '03:01' }
+    ]
+  },
+  {
+    id: 'c2',
+    caller: 'Meera Nair',
+    date: '15/02/2026',
+    duration: '2m 15s',
+    sessionId: 'H02',
+    summary: 'Consulting contract breach in Kochi. Client has missed monthly retainer payments totaling 4.5 Lakhs despite continued operations.',
+    transcript: [
+      { speaker: 'Meera Nair', text: 'Hello, Meera here. I\'m calling regarding a software contract dispute.', time: '00:01' },
+      { speaker: 'Nexus AI', text: 'Hello Meera. Nexus Voice Node Beta is active. Please share the details of your contract breach.', time: '00:12' },
+      { speaker: 'Meera Nair', text: 'My tech consultancy in Kochi built an analytics system for an e-commerce platform. Under the signed agreement, they owe us a monthly retainer.', time: '00:25' },
+      { speaker: 'Meera Nair', text: 'They have completely missed the payments for March, April, and May. The balance has accumulated to 4.5 Lakhs.', time: '00:44' },
+      { speaker: 'Nexus AI', text: 'Have they disputed the quality of deliverables, or sent any written communication explaining the non-payment?', time: '01:05' },
+      { speaker: 'Meera Nair', text: 'No, nothing in writing. They just keep claiming cash flow issues in phone calls, yet their platform is fully live and running our software.', time: '01:22' },
+      { speaker: 'Nexus AI', text: 'Under Section 73 of the Indian Contract Act, we can sue for damages and breach of terms. Have you sent a formal notice?', time: '01:45' },
+      { speaker: 'Meera Nair', text: 'No formal legal notice yet. Should we start with a strict demand letter on a lawyer\'s letterhead?', time: '01:58' },
+      { speaker: 'Nexus AI', text: 'Absolutely. A statutory demand notice giving them 15 days to clear the dues is the most effective first response. I am queuing the contract files for drafting.', time: '02:20' }
+    ]
+  },
+  {
+    id: 'c3',
+    caller: 'Adv. George Varghese',
+    date: '14/02/2026',
+    duration: '1m 55s',
+    sessionId: 'H03',
+    summary: 'Appeal preparation for the High Court. Counter-party has submitted a false income statement affidavit that contradicts public tax records.',
+    transcript: [
+      { speaker: 'Adv. George', text: 'Hi Nexus, this is Advocate George Varghese. I need to brief the team on an upcoming appeal.', time: '00:03' },
+      { speaker: 'Nexus AI', text: 'Hello Adv. George. Ready to ingest appeal briefs. What is the key contradiction discovered?', time: '01:14' },
+      { speaker: 'Adv. George', text: 'In the family maintenance suit, the respondent submitted a sworn affidavit claiming a net monthly income of just twenty thousand Rupees.', time: '01:26' },
+      { speaker: 'Adv. George', text: 'But we have retrieved their direct corporate tax filings for their registered packaging firm, which lists their personal draw at 1.5 Lakhs.', time: '01:46' },
+      { speaker: 'Nexus AI', text: 'This is a direct violation under perjury statutes and constitutes substantial grounds for modifying the lower court decree.', time: '02:10' },
+      { speaker: 'Adv. George', text: 'Exactly. We must draft an additional affidavit of contradiction and file it as supplementary evidence directly before the High Court judge.', time: '02:28' },
+      { speaker: 'Nexus AI', text: 'Affidavit of contradiction is being formatted. Please upload the certified tax returns. We will prepare the petition draft for review.', time: '02:45' }
+    ]
+  }
+];
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('home');
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
@@ -238,9 +345,83 @@ const App: React.FC = () => {
   const [micEnabled, setMicEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Toolbox Specific State
-  const [toolboxImage, setToolboxImage] = useState<string | null>(null);
-  const [isScanningToolbox, setIsScanningToolbox] = useState(false);
+  // Tele Prompt State
+  const [telePrompts, setTelePrompts] = useState<TelePromptItem[]>(() => {
+    const saved = localStorage.getItem('nexus_tele_prompts');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse saved tele prompts", e);
+      }
+    }
+    return DEFAULT_TELE_PROMPTS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('nexus_tele_prompts', JSON.stringify(telePrompts));
+  }, [telePrompts]);
+
+  const [newTeleCaller, setNewTeleCaller] = useState('');
+  const [newTeleInstruction, setNewTeleInstruction] = useState('');
+  const [newTeleNote, setNewTeleNote] = useState('');
+  const [editingTeleId, setEditingTeleId] = useState<string | null>(null);
+
+  // Simulation state
+  const [simulatedCallerName, setSimulatedCallerName] = useState('Raju');
+  const [simulationResult, setSimulationResult] = useState<{
+    status: 'matched' | 'no-match';
+    caller: string;
+    action: string;
+    matchedInstruction?: string;
+  } | null>(null);
+
+  // Login & Portal Reactivation States
+  const [showPortals, setShowPortals] = useState<boolean>(() => {
+    return localStorage.getItem('nexus_show_portals') === 'true';
+  });
+  const [loggedInUser, setLoggedInUser] = useState<{ name: string; email: string } | null>(() => {
+    const saved = localStorage.getItem('nexus_logged_in_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [loginName, setLoginName] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+
+  const handleToggleShowPortals = () => {
+    const newVal = !showPortals;
+    setShowPortals(newVal);
+    localStorage.setItem('nexus_show_portals', String(newVal));
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginName.trim() || !loginEmail.trim()) return;
+
+    const user = {
+      name: loginName.trim(),
+      email: loginEmail.trim()
+    };
+    setLoggedInUser(user);
+    localStorage.setItem('nexus_logged_in_user', JSON.stringify(user));
+    
+    // Auto-transition to 'command' view which is the Advocate Portal workflow
+    setView('command');
+  };
+
+  const handleLogout = () => {
+    setLoggedInUser(null);
+    localStorage.removeItem('nexus_logged_in_user');
+    setLoginName('');
+    setLoginEmail('');
+  };
+
 
   // Doc Converter States
   const [converterImage, setConverterImage] = useState<string | null>(null);
@@ -267,9 +448,312 @@ const App: React.FC = () => {
   // Transcription States
   const [userTranscription, setUserTranscription] = useState("");
   const [aiTranscription, setAiTranscription] = useState("");
+  const [isLiveThinking, setIsLiveThinking] = useState(false);
   const userTranscriptionRef = useRef("");
   const aiTranscriptionRef = useRef("");
+
+  // Voice Call Records State and Simulation Engine
+  const [callRecords, setCallRecords] = useState<CallRecord[]>(DEFAULT_CALL_RECORDS);
+  const [selectedCallId, setSelectedCallId] = useState<string>('c1');
+  const [isSimulatingCall, setIsSimulatingCall] = useState(false);
+  const [simulationStep, setSimulationStep] = useState(0);
+  const [currentSimulatedRecord, setCurrentSimulatedRecord] = useState<CallRecord | null>(null);
+
+  interface VoiceRecord {
+    id: string;
+    clientName: string;
+    date: string;
+    duration: string;
+    summary: string;
+    caseType: string;
+    transcript: { role: 'user' | 'ai'; text: string; id: number }[];
+  }
+
+  const [notification, setNotification] = useState<string | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<VoiceRecord | null>(null);
+  const [voiceRecords, setVoiceRecords] = useState<VoiceRecord[]>([
+    {
+      id: 'Session ID: H01',
+      clientName: 'Sreedharan K.',
+      date: '16/02/2026',
+      duration: '3m 4s',
+      caseType: 'Property Boundary Dispute',
+      summary: 'Property boundary dispute in Aluva. Neighbor is encroaching via new fence construction. Needs interim injunction against further work.',
+      transcript: [
+        { id: 1, role: 'user', text: "Hello, this is Sreedharan. I have a land encroachment issue in Aluva. My neighbor is building a compound wall that extends about two feet into our registered backyard plot." },
+        { id: 2, role: 'ai', text: "Understood, Mr. Sreedharan. In civil boundary encroachments, the primary remedies are an interim injunction under Order 39 Rules 1 and 2 of Civil Procedure Code (CPC) to stop ongoing construction immediately, followed by a suit for declaration of title and recovery of possession." },
+        { id: 3, role: 'user', text: "Yes, they are actively constructing it today! We asked them to halt but they refused. What document should we prepare right away?" },
+        { id: 4, role: 'ai', text: "We should file a suit for perpetual injunction and submit an urgent Interlocutory Application (IA) for temporary injunction. I will draft the petition and the supporting affidavit for you now. Make sure you have the registered deed and surveyor maps ready." }
+      ]
+    },
+    {
+      id: 'Session ID: H02',
+      clientName: 'Elena Rodriguez',
+      date: '15/02/2026',
+      duration: '5m 12s',
+      caseType: 'IP Infringement / Tech',
+      summary: 'Former contract software engineer launching cloned software with proprietary matching algorithm. Needs urgent intellectual property protection and NDA enforcement.',
+      transcript: [
+        { id: 1, role: 'user', text: "Help! A former contract developer is launching a clone of our proprietary matching algorithm. They signed an IP assignment agreement but claim they wrote it all from scratch." },
+        { id: 2, role: 'ai', text: "We must analyze the developer agreement's copyright and proprietary rights provisions. To secure an ex-parte ad-interim injunction, we need to establish prima-facie copyright infringement of source code or trade secret misappropriation under common law." },
+        { id: 3, role: 'user', text: "They still had active access to our GitHub repositories until yesterday. Can we prove electronic theft?" },
+        { id: 4, role: 'ai', text: "Yes, we can file an application for an expert commissioner or computer forensic examiner appointment to inspect git logs and server access footprints to back up our injunction request." }
+      ]
+    },
+    {
+      id: 'Session ID: H03',
+      clientName: 'Manoj Kumar',
+      date: '12/02/2026',
+      duration: '4m 15s',
+      caseType: 'Commercial Lease Dispute',
+      summary: 'Commercial tenant refuses to vacate after term expiry, raising disputes regarding interest security deposit deductions.',
+      transcript: [
+        { id: 1, role: 'user', text: "Our commercial tenant is refusing to vacate after their lease term expired on January 31st. They claim they are entitled to stay until we refund their entire security deposit interest, which is wrong under their lease covenants." },
+        { id: 2, role: 'ai', text: "A commercial tenant holding over after lease expiry without landlord's consent is technically a tenant at sufferance. If the lease does not stipulate security deposit interest, they cannot claim it as a condition precedent to vacating." },
+        { id: 3, role: 'user', text: "We offered them a written notice of eviction but they refused to sign. What should we file?" },
+        { id: 4, role: 'ai', text: "You should file a Summary Eviction Suit under Civil court jurisdiction. We'll outline that possession is unlawful post-expiry, and claim damages equivalent to double the rent for the holdover period, as permitted by the lease agreement." }
+      ]
+    }
+  ]);
+
+  const voiceCallPool = [
+    {
+      clientName: 'Vikram Singh',
+      caseType: 'Defamation & Media',
+      summary: 'Inbound claim for online defamation. Viral social media post containing malicious falsehoods damaging business reputation.',
+      transcript: [
+        { id: 1, role: 'user' as const, text: "A competitor published fake reviews and a viral blog post claiming our machinery causes hazardous emissions. Our business is down 30% this week." },
+        { id: 2, role: 'ai' as const, text: "That constitutes libel, actionable deflection, and civil defamation. We will prepare an urgent cease-and-desist letter claiming extensive damages and demanding immediate removal of all defamatory content, followed by a permanent injunction suit if they fail to comply within 48 hours." }
+      ]
+    },
+    {
+      clientName: 'Meera Nair',
+      caseType: 'Employment Retaliation',
+      summary: 'Unfair retaliation and constructive dismissal breach of labor rights without written guidelines or inquiry.',
+      transcript: [
+        { id: 1, role: 'user' as const, text: "My employer withheld my commission bonus and forced me to resign after I reported safety concerns at the facility." },
+        { id: 2, role: 'ai' as const, text: "This constitutes retaliation, constructive dismissal, and whistleblower violation. This gives you strong grounds to seek complete compensation for constructive wrongful termination under statutory labor standards." }
+      ]
+    },
+    {
+      clientName: 'Daniel Vance',
+      caseType: 'Contractual Default',
+      summary: 'Supply chain supplier failed to ship raw materials timely, triggering a default clause under the Master Supply Contract.',
+      transcript: [
+        { id: 1, role: 'user' as const, text: "Our steel supplier delayed our cargo shipment by 6 weeks. This caused us to miss our construction milestone and key project deadlines." },
+        { id: 2, role: 'ai' as const, text: "We will invoke the liquidated damages provision in Section 8.2 of your agreement, which limits liability to 1% of raw material cost per day of delay, and assess whether force majeure is legally inapplicable here." }
+      ]
+    }
+  ];
+
+  const simulateInboundCall = () => {
+    const randomCase = voiceCallPool[Math.floor(Math.random() * voiceCallPool.length)];
+    const newRecordId = `Session ID: S${Math.floor(100 + Math.random() * 900)}`;
+    
+    const newRecord: VoiceRecord = {
+      id: newRecordId,
+      clientName: randomCase.clientName,
+      date: 'Today',
+      duration: `${Math.floor(1 + Math.random() * 4)}m ${Math.floor(10 + Math.random() * 50)}s`,
+      caseType: randomCase.caseType,
+      summary: randomCase.summary,
+      transcript: randomCase.transcript
+    };
+    
+    setVoiceRecords(prev => [newRecord, ...prev]);
+    setNotification(`🔔 Simulated inbound call captured from ${randomCase.clientName}`);
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const SIMULATION_DIALOG = [
+    { speaker: 'Manoj Kumar', text: 'Hello? Is this the automated advocate intake system?' },
+    { speaker: 'Nexus AI', text: 'Yes, hello. This is Nexus Justice Voice Node Alpha. How can we assist you today?' },
+    { speaker: 'Manoj Kumar', text: 'I bought an online training subscription on a platform, and they changed the content entirely and refused to refund the fee of 15,000 Rupees.' },
+    { speaker: 'Nexus AI', text: 'Under the Consumer Protection Act, 2019, this constitutes unfair trade practice and deficiency of service. Did you purchase as an individual consumer?' },
+    { speaker: 'Manoj Kumar', text: 'Yes, just under my individual name, for my daughter\'s coding lesson. Over email they are completely ignoring me.' },
+    { speaker: 'Nexus AI', text: 'We have compiled substantial precedents for online coaching deficiency. We can dispatch a formal consumer grievance notice to their corporate office. Would you like to proceed?' },
+    { speaker: 'Manoj Kumar', text: 'Absolutely! I want a full refund of 15,000 and some penalty for harassment.' },
+    { speaker: 'Nexus AI', text: 'Noted. Our system is auto-converting this voice node transcript to an active drafting brief. Our advocate teams will review and contact you.' }
+  ];
+
+  const handleSimulateCall = () => {
+    if (isSimulatingCall) return;
+    
+    const newRecordId = `c-sim-${Date.now()}`;
+    const newRecord: CallRecord = {
+      id: newRecordId,
+      caller: 'Manoj Kumar',
+      date: 'Today',
+      duration: '0m 0s',
+      sessionId: `H0${callRecords.length + 1}`,
+      summary: 'Incoming live telephone consultation regarding consumer training program contract breach.',
+      transcript: []
+    };
+    
+    setCallRecords(prev => [newRecord, ...prev]);
+    setSelectedCallId(newRecordId);
+    setIsSimulatingCall(true);
+    setSimulationStep(0);
+    setCurrentSimulatedRecord(newRecord);
+  };
+
+  useEffect(() => {
+    if (!isSimulatingCall || !currentSimulatedRecord) return;
+    
+    if (simulationStep < SIMULATION_DIALOG.length) {
+      const timer = setTimeout(() => {
+        const nextMsg = SIMULATION_DIALOG[simulationStep];
+        setCallRecords(prev => prev.map(rec => {
+          if (rec.id === currentSimulatedRecord.id) {
+            return {
+              ...rec,
+              duration: `0m ${(simulationStep + 1) * 8}s`,
+              transcript: [...rec.transcript, { ...nextMsg, time: `00:${((simulationStep + 1) * 8).toString().padStart(2, '0')}` }]
+            };
+          }
+          return rec;
+        }));
+        setSimulationStep(prev => prev + 1);
+      }, 2500);
+      return () => clearTimeout(timer);
+    } else {
+      setIsSimulatingCall(false);
+      setCurrentSimulatedRecord(null);
+    }
+  }, [isSimulatingCall, simulationStep, currentSimulatedRecord]);
   
+  // Touch Swiping Refs & Swipe handler
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    if (view === 'home') return;
+
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    
+    const deltaX = endX - touchStartX.current;
+    const deltaY = endY - touchStartY.current;
+    
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    const minSwipeDistance = 50; 
+    
+    if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      const swipeableViews: AppView[] = [
+        'reading-room',
+        'command',
+        'tele-prompt',
+        'system-prompt',
+        'clients',
+        'consult',
+        'drafting',
+        'convert',
+        'knowledge',
+        'brain-manager',
+        'archive',
+        'interaction-feed'
+      ];
+      
+      const currentIndex = swipeableViews.indexOf(view);
+      if (currentIndex !== -1) {
+        if (deltaX < 0) {
+          // Swiped Left -> Move to Next view
+          const nextIndex = (currentIndex + 1) % swipeableViews.length;
+          setView(swipeableViews[nextIndex]);
+        } else {
+          // Swiped Right -> Move to Previous view
+          const prevIndex = (currentIndex - 1 + swipeableViews.length) % swipeableViews.length;
+          setView(swipeableViews[prevIndex]);
+        }
+      }
+    }
+  };
+
+  // Tele Prompt Handlers
+  const handleSaveTelePrompt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeleCaller.trim() || !newTeleInstruction.trim()) return;
+
+    if (editingTeleId) {
+      setTelePrompts(prev => prev.map(item => item.id === editingTeleId ? {
+        ...item,
+        caller: newTeleCaller.trim(),
+        instruction: newTeleInstruction.trim(),
+        note: newTeleNote.trim() || undefined
+      } : item));
+      setEditingTeleId(null);
+    } else {
+      const newItem: TelePromptItem = {
+        id: `tp-${Date.now()}`,
+        caller: newTeleCaller.trim(),
+        instruction: newTeleInstruction.trim(),
+        isActive: true,
+        note: newTeleNote.trim() || undefined,
+        createdAt: new Date().toISOString()
+      };
+      setTelePrompts(prev => [newItem, ...prev]);
+    }
+
+    setNewTeleCaller('');
+    setNewTeleInstruction('');
+    setNewTeleNote('');
+  };
+
+  const handleEditTelePrompt = (item: TelePromptItem) => {
+    setEditingTeleId(item.id);
+    setNewTeleCaller(item.caller);
+    setNewTeleInstruction(item.instruction);
+    setNewTeleNote(item.note || '');
+  };
+
+  const handleDeleteTelePrompt = (id: string) => {
+    setTelePrompts(prev => prev.filter(item => item.id !== id));
+    if (editingTeleId === id) {
+      setEditingTeleId(null);
+      setNewTeleCaller('');
+      setNewTeleInstruction('');
+      setNewTeleNote('');
+    }
+  };
+
+  const handleToggleTelePrompt = (id: string) => {
+    setTelePrompts(prev => prev.map(item => item.id === id ? { ...item, isActive: !item.isActive } : item));
+  };
+
+  const handleSimulateCallTrigger = () => {
+    const callerName = simulatedCallerName.trim();
+    if (!callerName) return;
+
+    // Find first active matched prompt
+    const matched = telePrompts.find(item => 
+      item.isActive && 
+      callerName.toLowerCase().includes(item.caller.toLowerCase())
+    );
+
+    if (matched) {
+      setSimulationResult({
+        status: 'matched',
+        caller: callerName,
+        action: `Incoming call from "${callerName}" intercepted by Advocate AI. Triggering active directive...`,
+        matchedInstruction: matched.instruction
+      });
+    } else {
+      setSimulationResult({
+        status: 'no-match',
+        caller: callerName,
+        action: `Incoming call from "${callerName}" intercepted by Advocate AI. No matching direct routing rule found. Reverting to default answering system script.`
+      });
+    }
+  };
+
   // Direct text input fallback states
   const [textInput, setTextInput] = useState("");
   const [isAiGeneratingText, setIsAiGeneratingText] = useState(false);
@@ -518,7 +1002,10 @@ const App: React.FC = () => {
           systemInstruction: systemPrompt 
         },
         callbacks: {
-          onopen: () => setStatus(ConnectionStatus.CONNECTED),
+          onopen: () => {
+            setStatus(ConnectionStatus.CONNECTED);
+            setIsLiveThinking(false);
+          },
           onmessage: async (msg: LiveServerMessage) => {
             const base64Audio = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (base64Audio) {
@@ -532,12 +1019,17 @@ const App: React.FC = () => {
               source.start(nextStartTimeRef.current);
               nextStartTimeRef.current += buffer.duration;
               sourcesRef.current.add(source);
+              // If there's active audio, AI is speaking, so it's not thinking anymore
+              setIsLiveThinking(false);
             }
             if (msg.serverContent?.inputTranscription?.text) {
               userTranscriptionRef.current = (userTranscriptionRef.current + " " + msg.serverContent.inputTranscription.text).trim();
               setUserTranscription(userTranscriptionRef.current);
+              // Set thinking to true as user speech is parsed and AI starts formulating
+              setIsLiveThinking(true);
             }
             if (msg.serverContent?.outputTranscription?.text) {
+              setIsLiveThinking(false);
               aiTranscriptionRef.current = (aiTranscriptionRef.current + " " + msg.serverContent.outputTranscription.text).trim();
               setAiTranscription(aiTranscriptionRef.current);
             }
@@ -558,10 +1050,17 @@ const App: React.FC = () => {
               aiTranscriptionRef.current = "";
               setUserTranscription("");
               setAiTranscription("");
+              setIsLiveThinking(false);
             }
           },
-          onerror: (e) => setStatus(ConnectionStatus.ERROR),
-          onclose: () => setStatus(ConnectionStatus.DISCONNECTED)
+          onerror: (e) => {
+            setStatus(ConnectionStatus.ERROR);
+            setIsLiveThinking(false);
+          },
+          onclose: () => {
+            setStatus(ConnectionStatus.DISCONNECTED);
+            setIsLiveThinking(false);
+          }
         }
       });
       sessionRef.current = session;
@@ -649,36 +1148,16 @@ const App: React.FC = () => {
     }
   };
 
-  const downloadPDF = (fromToolbox = false) => {
+  const downloadPDF = () => {
     const doc = new jsPDF();
-    if (fromToolbox && toolboxImage) {
-      const imgProps = doc.getImageProperties(toolboxImage);
-      const pdfWidth = doc.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      doc.setFontSize(10);
-      doc.text("Nexus Justice - Document Processing Hub", 10, 10);
-      doc.addImage(toolboxImage, 'JPEG', 0, 20, pdfWidth, pdfHeight);
-    } else {
-      const content = history.map(h => `${h.role === 'user' ? 'YOU' : 'NEXUS'}: ${h.text}`).join('\n\n');
-      doc.text("Nexus Justice Legal Transcript", 10, 10);
-      doc.text(doc.splitTextToSize(content || "Empty session", 180), 10, 20);
-    }
+    const content = history.map(h => `${h.role === 'user' ? 'YOU' : 'NEXUS'}: ${h.text}`).join('\n\n');
+    doc.text("Nexus Justice Legal Transcript", 10, 10);
+    doc.text(doc.splitTextToSize(content || "Empty session", 180), 10, 20);
     doc.save(`nexus_legal_${Date.now()}.pdf`);
   };
 
-  const downloadWord = (fromToolbox = false) => {
-    let content = '';
-    if (fromToolbox && toolboxImage) {
-      content = `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 10px;">Nexus Justice - Scanned Document</h2>
-          <div style="margin: 20px 0; text-align: center;">
-            <img src="${toolboxImage}" style="max-width: 100%; height: auto; border: 1px solid #ccc; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
-          </div>
-        </div>`;
-    } else {
-      content = history.map(h => `<p><b>${h.role === 'user' ? 'YOU' : 'NEXUS'}</b>: ${h.text}</p>`).join('');
-    }
+  const downloadWord = () => {
+    let content = history.map(h => `<p><b>${h.role === 'user' ? 'YOU' : 'NEXUS'}</b>: ${h.text}</p>`).join('');
     const blob = new Blob(['\ufeff', "<html><body>" + content + "</body></html>"], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -686,22 +1165,6 @@ const App: React.FC = () => {
     link.download = `nexus_legal_${Date.now()}.doc`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handleToolboxCaptureAndStop = () => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (canvas && video) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0);
-        setToolboxImage(canvas.toDataURL('image/jpeg'));
-        setIsScanningToolbox(false);
-        stopHardware();
-      }
-    }
   };
 
   const handleTextSubmit = async (e: React.FormEvent) => {
@@ -1404,13 +1867,14 @@ Please provide an extremely precise, professional, and well-organized legal resp
 
   const navigationItems: { id: AppView, label: string }[] = [
     { id: 'home', label: 'Home' },
-    { id: 'reading-room', label: 'Reading Room' },
-    { id: 'toolbox', label: 'Toolbox' },
     { id: 'command', label: 'Command' },
+    { id: 'tele-prompt', label: 'Tele Prompt' },
+    { id: 'reading-room', label: 'Reading Room' },
     { id: 'system-prompt', label: 'System' },
     { id: 'clients', label: 'Clients' },
     { id: 'consult', label: 'Consult' },
     { id: 'drafting', label: 'Drafting' },
+    { id: 'contract', label: 'Contract' },
     { id: 'convert', label: 'Convert' },
     { id: 'knowledge', label: 'Knowledge' },
     { id: 'brain-manager', label: 'Brain' },
@@ -1430,12 +1894,11 @@ Please provide an extremely precise, professional, and well-organized legal resp
           <div className="flex items-center gap-4">
              {/* Full Navigation Menu - Restricted to Advocate Portal only */}
              {isAdvocatePortal && (
-               <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5 overflow-x-auto no-scrollbar max-w-[70vw]">
+               <div className="flex gap-1 p-1 pb-2 bg-white/5 rounded-xl border border-white/5 overflow-x-auto custom-horizontal-scrollbar max-w-[70vw]">
                   {navigationItems.map((item) => (
                     <button 
                       key={item.id}
                       onClick={() => {
-                        if (isScanningToolbox) { setIsScanningToolbox(false); stopHardware(); }
                         setView(item.id);
                       }}
                       className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap cursor-pointer select-none ${view === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
@@ -1464,119 +1927,669 @@ Please provide an extremely precise, professional, and well-organized legal resp
             </div>
           )}
 
-          <div className="flex-1 relative overflow-hidden bg-[#020617]">
+          <div 
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="flex-1 relative overflow-hidden bg-[#020617]"
+          >
             {view === 'home' && (
               <div className="w-full h-full flex flex-col p-12 overflow-y-auto custom-scrollbar animate-in fade-in duration-1000">
-                 <div className="max-w-4xl mx-auto w-full pt-10">
-                    <h1 className="text-[64px] font-black tracking-tighter italic mb-4 leading-[0.9]">ACCESS HUB</h1>
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-16">Select your role to initialize the Titan interface.</p>
-                    
+                 <div className="max-w-xl mx-auto w-full pt-10 flex flex-col min-h-[80%] justify-between gap-12">
                     <div className="space-y-6">
-                       <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60">
-                          <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em]">Master Command</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter">Agency HQ</h2>
+                       <div className="text-left">
+                          <h1 className="text-[64px] font-black tracking-tighter italic mb-2 leading-[0.9] uppercase font-sans">
+                             {showPortals ? "ACCESS HUB" : "NEXUS LOGIN"}
+                          </h1>
+                          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] font-sans">
+                             {showPortals 
+                                ? "Select your role to initialize the Titan interface." 
+                                : "Please complete identification to establish secure proxy tunnel."}
+                          </p>
                        </div>
+                    
+                       {showPortals ? (
+                          /* Original hidable Portals Section */
+                          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                             <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60 text-left">
+                                <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em]">Master Command</div>
+                                <h2 className="text-4xl font-black italic tracking-tighter">Agency HQ</h2>
+                             </div>
 
-                       <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60">
-                          <div className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">Growth & Rewards</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter">Affiliates</h2>
+                             <div className="group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.03] cursor-not-allowed opacity-60 text-left">
+                                <div className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">Growth & Rewards</div>
+                                <h2 className="text-4xl font-black italic tracking-tighter">Affiliates</h2>
+                             </div>
+
+                             <button 
+                               onClick={() => setView('command')}
+                               className="w-full text-left group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(79,70,229,0.15)] transform active:scale-[0.99] cursor-pointer"
+                             >
+                                <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em]">Legal Workflow</div>
+                                <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Advocate Portal</h2>
+                             </button>
+                          </div>
+                       ) : (
+                          /* Modern Secure Login Form Section as requested */
+                          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                             {loggedInUser ? (
+                                <div className="bg-[#0a0f1d] border border-emerald-500/10 rounded-[2.5rem] p-10 flex flex-col gap-6 shadow-2xl relative overflow-hidden text-left font-sans">
+                                   <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-2xl rounded-full pointer-events-none" />
+                                   
+                                   <div>
+                                      <div className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-1.5 font-mono">
+                                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                         Session Restored
+                                      </div>
+                                      <h2 className="text-3xl font-black italic tracking-tighter text-white font-sans">
+                                         Welcome back, {loggedInUser.name}
+                                      </h2>
+                                      <p className="text-slate-400 text-xs font-medium mt-1 font-mono">
+                                         {loggedInUser.email}
+                                      </p>
+                                   </div>
+
+                                   <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                                      <button 
+                                         onClick={() => setView('command')}
+                                         className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all shadow-lg active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 font-sans"
+                                      >
+                                         Proceed to Advocate Portal
+                                         <ChevronRight className="w-4 h-4" />
+                                      </button>
+                                      
+                                      <button 
+                                         onClick={handleLogout}
+                                         className="px-6 py-4 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 font-bold uppercase text-[9px] tracking-widest rounded-2xl transition-all cursor-pointer font-sans"
+                                      >
+                                         Sign Out
+                                      </button>
+                                   </div>
+                                </div>
+                             ) : (
+                                <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-6 shadow-2xl relative overflow-hidden text-left font-sans">
+                                   <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl rounded-full pointer-events-none" />
+                                   
+                                   <div>
+                                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-300 italic mb-1 font-sans">Advocate Credential Identification</h3>
+                                      <p className="text-slate-500 text-[9px] font-semibold uppercase tracking-widest font-sans">Provide coordinates to access your secure legal terminal.</p>
+                                   </div>
+
+                                   <form onSubmit={handleLoginSubmit} className="space-y-6">
+                                      <div className="space-y-4">
+                                         <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-2 font-mono text-left">
+                                               Advocate Name / Operator Handle
+                                            </label>
+                                            <div className="relative">
+                                               <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500">
+                                                  <User className="w-4 h-4" />
+                                               </span>
+                                               <input 
+                                                  type="text"
+                                                  placeholder="Enter your name..."
+                                                  value={loginName}
+                                                  onChange={(e) => setLoginName(e.target.value)}
+                                                  className="w-full bg-[#181d2c]/65 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-white text-xs font-semibold placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors font-sans"
+                                                  required
+                                               />
+                                            </div>
+                                         </div>
+
+                                         <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-2 font-mono text-left">
+                                               Secure Email Contact
+                                            </label>
+                                            <div className="relative">
+                                               <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500 font-mono">
+                                                  @
+                                               </span>
+                                               <input 
+                                                  type="email"
+                                                  placeholder="email@example.com..."
+                                                  value={loginEmail}
+                                                  onChange={(e) => setLoginEmail(e.target.value)}
+                                                  className="w-full bg-[#181d2c]/65 border border-white/5 rounded-2xl pl-11 pr-4 py-3.5 text-white text-xs font-semibold placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors font-sans"
+                                                  required
+                                               />
+                                            </div>
+                                         </div>
+                                      </div>
+
+                                      <button
+                                         type="submit"
+                                         className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[9px] rounded-2xl transition-all shadow-lg shadow-indigo-600/20 active:scale-[0.98] cursor-pointer font-sans"
+                                      >
+                                         Authorize & Initialize Interface
+                                      </button>
+                                   </form>
+                                </div>
+                             )}
+                          </div>
+                       )}
+                    </div>
+
+                    {/* Quick switch configuration utility and status bar to reactivate visual portals as requested */}
+                    <div className="pt-6 border-t border-white/5 flex flex-col items-center sm:flex-row justify-between gap-4 text-left font-sans shrink-0">
+                       <div className="text-left font-sans">
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-sans">
+                             System Mode Configuration: <span className="text-indigo-400 font-bold">{showPortals ? "PORTAL RUNTIME" : "SECURE SHELL GATEWAY"}</span>
+                          </p>
+                          <p className="text-slate-600 text-[8px] font-bold uppercase tracking-wider font-sans mt-0.5">
+                             You can reactivate or toggle the original Agency / Affiliate portals at any time.
+                          </p>
                        </div>
-
-                       <button 
-                         onClick={() => setView('command')}
-                         className="w-full text-left group bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-10 flex flex-col gap-2 transition-all hover:bg-white/[0.05] hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(79,70,229,0.15)] transform active:scale-[0.99]"
+                       
+                       <button
+                          type="button"
+                          onClick={handleToggleShowPortals}
+                          className={`px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer font-sans ${
+                             showPortals 
+                                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border-amber-500/20' 
+                                : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+                          }`}
                        >
-                          <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em]">Legal Workflow</div>
-                          <h2 className="text-4xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Advocate Portal</h2>
+                          {showPortals ? "🔒 Switch to Login UI" : "🔌 Reactivate Portal Selection"}
                        </button>
                     </div>
+
                  </div>
               </div>
             )}
 
             {view === 'command' && (
-              <div className="w-full h-full p-8 flex gap-8 overflow-hidden">
-                 {/* Left Panel: Command Center Controls */}
-                 <div className="w-[400px] flex flex-col gap-6 shrink-0">
-                    <div className="bg-[#0a0f1d] rounded-[2rem] p-8 border border-white/5 shadow-2xl flex flex-col gap-4">
-                       <div className="text-amber-500 text-[9px] font-black uppercase tracking-[0.4em]">Voice Node Alpha</div>
-                       <h3 className="text-4xl font-black italic tracking-tighter">Command<span className="text-slate-500">Center</span></h3>
-                       
-                       <div className="mt-4 space-y-4">
-                          <button className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all">
-                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 11-2 0 1 1 0 012 0zM8 16v-1a1 1 0 112 0v1a1 1 0 11-2 0zM13.536 14.95a1 1 0 011.414 0l.707.707a1 1 0 11-1.414 1.414l-.707-.707a1 1 0 010-1.414zM16.586 7.879l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414-1.414z" /></svg>
-                             Simulate Inbound Call
-                          </button>
-                          
-                          <button className="w-full py-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-amber-500">
-                             <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                             Auto-Consult Active
-                          </button>
-                       </div>
-                    </div>
+               <div className="w-full h-full p-6 sm:p-8 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+                  {notification && (
+                     <div className="bg-indigo-600/15 border border-indigo-500/30 text-indigo-200 px-6 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-top-3 flex items-center gap-2 shadow-lg shrink-0">
+                        <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+                        <span>{notification}</span>
+                     </div>
+                  )}
+                  
+                  <div className="w-full flex flex-col xl:flex-row gap-6 sm:gap-8">
+                     {/* Left Panel: Command Center Controls */}
+                     <div className="w-full xl:w-[400px] flex flex-col gap-6 shrink-0">
+                        <div className="bg-[#0a0f1d] rounded-[2rem] p-8 border border-white/5 shadow-2xl flex flex-col gap-4">
+                           <div className="text-amber-500 text-[9px] font-black uppercase tracking-[0.4em]">Voice Node Alpha</div>
+                           <h3 className="text-4xl font-black italic tracking-tighter">Command<span className="text-slate-500">Center</span></h3>
+                           
+                           <div className="mt-4 space-y-4">
+                              <button onClick={simulateInboundCall} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer font-sans">
+                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 11-2 0 1 1 0 012 0zM8 16v-1a1 1 0 112 0v1a1 1 0 11-2 0zM13.536 14.95a1 1 0 011.414 0l.707.707a1 1 0 11-1.414 1.414l-.707-.707a1 1 0 010-1.414zM16.586 7.879l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414-1.414z" /></svg>
+                                 Simulate Inbound Call
+                              </button>
+                              
+                              <button className="w-full py-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-amber-500">
+                                 <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                                 Auto-Consult Active
+                              </button>
+                           </div>
+                        </div>
 
-                    <div className="bg-indigo-600 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center gap-4 shadow-2xl shadow-indigo-600/20 flex-1 group cursor-pointer hover:scale-[1.02] transition-transform">
-                       <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center border border-white/20 mb-2">
-                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                       </div>
-                       <h4 className="text-xl font-black uppercase tracking-widest leading-none">Direct Agent Consultation</h4>
-                       <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Internal Voice Link</p>
-                    </div>
+                        <button onClick={() => setView('consult')} className="w-full bg-[#121c38]/45 border border-[#6366f1]/20 rounded-xl p-4 flex items-center justify-between group cursor-pointer hover:bg-[#16244a]/60 active:scale-[0.99] transition-all text-left font-sans">
+                           <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-[#6366f1]/15 rounded-lg flex items-center justify-center border border-[#6366f1]/25 text-indigo-400 group-hover:text-[#818cf8] transition-colors shrink-0">
+                                 <PhoneCall className="w-4 h-4" />
+                              </div>
+                              <div className="text-left">
+                                 <h4 className="text-xs font-bold uppercase tracking-wider text-[#c7d2fe]">Consultation</h4>
+                                 <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Direct agent consultation</p>
+                              </div>
+                           </div>
+                           <span className="text-[8px] font-black uppercase text-[#818cf8] border border-[#6366f1]/20 px-2 py-0.5 rounded bg-[#6366f1]/10 shrink-0">Ready</span>
+                        </button>
 
-                    <div className="bg-white/2 border border-white/5 rounded-[2rem] p-6 flex items-center gap-4">
-                       <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                       <div>
-                          <div className="text-[10px] font-black uppercase tracking-widest">Nexus Mainnet</div>
-                          <div className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Uplink: Primary-01</div>
-                       </div>
+                        <div className="bg-white/2 border border-white/5 rounded-[2rem] p-6 flex items-center gap-4">
+                           <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                           <div>
+                              <div className="text-[10px] font-black uppercase tracking-widest">Nexus Mainnet</div>
+                              <div className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">Uplink: Primary-01</div>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Right Panel: Voice Ledger */}
+                     <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-white/5 p-6 sm:p-8 flex flex-col shadow-2xl relative overflow-hidden text-left min-h-[450px]">
+                        <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-4 text-left w-full shrink-0">
+                           <div className="text-left">
+                              <h2 className="text-sm font-black uppercase tracking-widest text-[#cfd7e6] flex items-center gap-1.5 italic font-sans animate-fade-in text-left">
+                                 <Volume2 className="w-4 h-4 text-[#818cf8] not-italic shrink-0" />
+                                 Voice<span className="text-slate-500 normal-case font-light not-italic font-sans">Ledger</span>
+                              </h2>
+                              <p className="text-slate-600 text-[9px] font-semibold uppercase tracking-widest mt-1.5 font-sans leading-normal text-left">Scroll through practice records. Select a case to read full transcripts.</p>
+                           </div>
+                           <div className="text-right font-sans shrink-0">
+                              <div className="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-0.5">Active</div>
+                              <div className="text-xl font-bold text-amber-500 leading-none">{voiceRecords.length}</div>
+                           </div>
+                        </div>
+                        
+                        {/* Compact Case Ledger List */}
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar text-left font-sans">
+                           {voiceRecords.map((record) => (
+                              <div 
+                                 key={record.id}
+                                 onClick={() => setSelectedRecord(record)}
+                                 className="bg-white/[0.01] hover:bg-white/[0.04] border border-white/5 hover:border-indigo-500/15 rounded-xl p-4 transition-all duration-200 cursor-pointer group flex items-center justify-between text-left font-sans"
+                              >
+                                 <div className="flex items-center gap-3.5 text-left font-sans">
+                                    <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/15 transition-all font-sans shrink-0">
+                                       <User className="w-3.5 h-3.5 font-sans" />
+                                    </div>
+                                    <div className="text-left font-sans animate-fade-in">
+                                       <div className="flex items-center gap-1.5 text-left font-sans">
+                                          <span className="text-[8px] font-mono font-black text-amber-500 tracking-wider uppercase">{record.id}</span>
+                                          <span className="text-[8px] font-sans font-black text-slate-500 tracking-wider uppercase">• {record.caseType}</span>
+                                       </div>
+                                       {/* Name is small font text now */}
+                                       <h4 className="text-xs font-bold text-slate-300 group-hover:text-indigo-400 transition-colors uppercase tracking-wide mt-0.5 text-left font-sans">{record.clientName}</h4>
+                                       <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 italic text-left font-sans">"{record.summary}"</p>
+                                    </div>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-4 shrink-0 text-left font-sans">
+                                    <div className="text-right hidden sm:block font-sans">
+                                       <span className="text-[8px] font-bold text-slate-500 tracking-wider block">{record.date}</span>
+                                       <span className="text-[8px] font-bold text-slate-400 block mt-0.5">{record.duration}</span>
+                                    </div>
+                                    <div className="w-6 h-6 bg-white/5 group-hover:bg-indigo-600 rounded-lg flex items-center justify-center text-slate-400 group-hover:text-white transition-all transform group-hover:translate-x-0.5 font-sans shrink-0">
+                                       <ChevronRight className="w-3.5 h-3.5" />
+                                    </div>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* High Fidelity Full-Screen Modal Dialog for full conversation transcripts */}
+                  {selectedRecord && (
+                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-300 font-sans">
+                        <div className="bg-[#090d16] border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 font-sans">
+                           
+                           {/* Modal Header */}
+                           <div className="p-8 border-b border-white/5 flex items-start justify-between bg-[#0a0f1d] shrink-0 text-left w-full font-sans">
+                              <div className="text-left font-sans">
+                                 <div className="flex items-center gap-2 mb-2 font-sans">
+                                    <span className="text-[9px] font-black text-amber-500 tracking-widest uppercase border border-amber-500/20 px-2 py-0.5 rounded-full bg-amber-500/5 font-mono">{selectedRecord.id}</span>
+                                    <span className="text-[9px] font-black text-indigo-400 tracking-widest uppercase border border-indigo-500/20 px-2 py-0.5 rounded-full bg-indigo-500/5 font-sans">{selectedRecord.caseType}</span>
+                                 </div>
+                                 <h3 className="text-xl font-bold tracking-tight text-white uppercase font-sans">{selectedRecord.clientName}</h3>
+                                 <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1 font-sans">Recorded Voice Session Transcript</p>
+                              </div>
+                              <button 
+                                 onClick={() => setSelectedRecord(null)}
+                                 className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              >
+                                 <X className="w-5 h-5 font-sans" />
+                               </button>
+                           </div>
+
+                           {/* Modal Content */}
+                           <div className="p-8 overflow-y-auto space-y-6 flex-1 custom-scrollbar text-left font-sans">
+                              {/* Briefing Summary */}
+                              <div className="bg-[#111827]/80 border border-white/5 rounded-2xl p-5 text-left h-auto font-sans">
+                                 <h4 className="text-[9px] font-black uppercase text-indigo-400 tracking-wider mb-2 flex items-center gap-1.5 text-left font-sans">
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Briefing Summary
+                                 </h4>
+                                 <p className="text-xs font-semibold text-slate-400 leading-relaxed italic text-left font-sans">
+                                    "{selectedRecord.summary}"
+                                 </p>
+                              </div>
+
+                              {/* Interactive Transcript */}
+                              <div className="space-y-4 text-left font-sans">
+                                 <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4 text-left w-full font-sans">
+                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 font-sans">
+                                       <MessageSquare className="w-3.5 h-3.5" />
+                                       Full Conversation Transcript
+                                    </h4>
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase font-sans">{selectedRecord.duration} Rec Length</span>
+                                 </div>
+
+                                 <div className="space-y-4 text-left w-full font-sans">
+                                    {selectedRecord.transcript.map((turn) => (
+                                       <div 
+                                          key={turn.id} 
+                                          className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                       >
+                                          <div className={`p-5 rounded-2xl text-[12.5px] leading-relaxed max-w-[85%] border transition-all text-left ${
+                                             turn.role === 'user' 
+                                                ? 'bg-[#181d2c]/65 border-white/5 text-slate-300 rounded-br-none italic font-sans' 
+                                                : 'bg-indigo-650/10 border-indigo-500/20 text-indigo-100 rounded-bl-none font-sans'
+                                          }`}>
+                                             <div className="text-[9px] font-black uppercase tracking-wider mb-1.5 flex items-center gap-1.5 text-left font-mono">
+                                                {turn.role === 'user' ? (
+                                                   <>
+                                                      <User className="w-3 h-3 text-amber-500" />
+                                                      <span className="text-amber-500 font-sans">Client Statement</span>
+                                                   </>
+                                                ) : (
+                                                   <>
+                                                      <Sparkles className="w-3 h-3 text-indigo-400 animate-pulse" />
+                                                      <span className="text-indigo-400 font-sans">Nexus Legal Counsel</span>
+                                                   </>
+                                                )}
+                                             </div>
+                                             <p className="font-semibold text-slate-300 text-left font-sans">{turn.text}</p>
+                                          </div>
+                                       </div>
+                                    ))}
+                                 </div>
+                              </div>
+                           </div>
+
+                           {/* Modal Footer actions */}
+                           <div className="p-6 border-t border-white/5 bg-[#0a0f1d] flex gap-4 shrink-0 text-left w-full font-mono">
+                              <button onClick={() => setSelectedRecord(null)} className="flex-1 py-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all cursor-pointer font-sans">
+                                 <X className="w-4 h-4 font-sans" />
+                                 Close & Return
+                              </button>
+                              <button onClick={() => { setSelectedRecord(null); setView('drafting'); }} className="flex-1 py-4 bg-emerald-600 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-black font-extrabold shadow-lg shadow-emerald-600/10 hover:bg-emerald-500 transition-all cursor-pointer font-sans">
+                                 <FileText className="w-4 h-4 font-sans" />
+                                 Draft Petition
+                              </button>
+                           </div>
+
+                        </div>
+                     </div>
+                  )}
+               </div>
+            )}
+
+            {view === 'tele-prompt' && (
+              <div className="w-full h-full p-6 sm:p-12 flex flex-col gap-6 sm:gap-10 overflow-y-auto custom-scrollbar bg-[#020617] relative">
+                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-amber-500/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                 
+                 {/* Header Section */}
+                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0 text-left border-b border-white/5 pb-6">
+                    <div className="text-left font-sans">
+                       <div className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 mb-2 italic font-sans text-left">Call Delegator Core</div>
+                       <h3 className="text-4xl font-black tracking-tighter italic font-sans text-left">Tele Prompt<span className="text-slate-500 not-italic normal-case font-light font-sans ml-2">Directives</span></h3>
+                       <p className="text-slate-400 text-xs mt-1.5 font-medium leading-relaxed max-w-2xl font-sans text-left">
+                          Configure live intercept prompts for your virtual AI telephone answering service. 
+                          Instruct the AI receptionist how to reply to specific clients instantly.
+                       </p>
+                    </div>
+                    <div className="flex gap-3">
+                       <span className="text-[9px] font-black uppercase text-amber-500 border border-amber-500/20 px-3 py-1.5 rounded-xl bg-amber-500/10 shrink-0 flex items-center gap-1.5 font-sans">
+                          <Cpu className="w-3 h-3 text-amber-500 animate-pulse" />
+                          Routing Node: Connected
+                       </span>
                     </div>
                  </div>
 
-                 {/* Right Panel: Voice Ledger */}
-                 <div className="flex-1 bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-12 flex flex-col shadow-2xl relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-12">
-                       <div>
-                          <h3 className="text-6xl font-black italic tracking-tighter">Voice<span className="text-slate-800">Ledger</span></h3>
-                          <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-2">Scroll through practice records. Select a case to briefing Gemini.</p>
-                       </div>
-                       <div className="text-right">
-                          <div className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Active Records</div>
-                          <div className="text-4xl font-black text-amber-500 leading-none">1</div>
-                       </div>
-                    </div>
-
-                    <div className="flex-1 bg-white/[0.03] border border-white/5 rounded-[3rem] p-10 flex flex-col justify-between group shadow-inner">
-                       <div className="flex justify-between items-start">
-                          <div>
-                             <div className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">Session ID: H01</div>
-                             <h2 className="text-5xl font-black italic tracking-tighter group-hover:text-indigo-400 transition-colors">Sreedharan K.</h2>
-                          </div>
-                          <div className="text-right">
-                             <div className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">16/02/2026</div>
-                             <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">3m 4s</div>
-                          </div>
-                       </div>
-
-                       <div className="bg-black/40 rounded-[2rem] p-10 border border-white/5 mb-8">
-                          <div className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.4em] mb-4">Summary:</div>
-                          <p className="text-lg font-medium text-slate-400 leading-relaxed italic">
-                             "Property boundary dispute in Aluva. Neighbor is encroaching via new fence construction. Needs interim injunction against further work."
-                          </p>
-                       </div>
-
-                       <div className="flex gap-4">
-                          <button className="flex-1 py-5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:bg-white/10 transition-all">
-                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" /></svg>
-                             Discuss Case
-                          </button>
-                          <button onClick={() => setView('drafting')} className="flex-1 py-5 bg-emerald-600 rounded-2xl flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-[0.2em] text-black shadow-xl shadow-emerald-600/20 hover:bg-emerald-500 transition-all">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                              Draft Petition
-                           </button>
-                       </div>
+                 {/* Grid Content */}
+                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                    
+                    {/* Left Column: Management Panel */}
+                    <div className="flex flex-col gap-8">
                        
-                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-32 bg-slate-800/30 rounded-l-full" />
+                       {/* Add/Edit Directive Clause */}
+                       <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+                          <h4 className="text-sm font-black uppercase tracking-wider text-white mb-6 flex items-center gap-2 text-left font-sans">
+                             <Plus className="w-4 h-4 text-amber-500" />
+                             {editingTeleId ? 'Modify Routing Directive' : 'Create Intercept Rule'}
+                          </h4>
+                          
+                          <form onSubmit={handleSaveTelePrompt} className="space-y-6 text-left">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div>
+                                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2 font-mono text-left">
+                                      Caller Display Name / Keyword
+                                   </label>
+                                   <input 
+                                      type="text"
+                                      placeholder="e.g., Raju, Clerk, Landlord"
+                                      value={newTeleCaller}
+                                      onChange={(e) => setNewTeleCaller(e.target.value)}
+                                      className="w-full bg-[#181d2c]/65 border border-white/5 rounded-xl px-4 py-3 text-white text-xs font-semibold placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-sans"
+                                      required
+                                   />
+                                </div>
+                                <div>
+                                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2 font-mono text-left">
+                                      Directive Target Group (Optional)
+                                   </label>
+                                   <input 
+                                      type="text"
+                                      placeholder="e.g., Court Clerk, Boundary Case"
+                                      value={newTeleNote}
+                                      onChange={(e) => setNewTeleNote(e.target.value)}
+                                      className="w-full bg-[#181d2c]/65 border border-white/5 rounded-xl px-4 py-3 text-white text-xs font-semibold placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-sans"
+                                   />
+                                </div>
+                             </div>
+
+                             <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2 font-mono text-left">
+                                   AI Response Instruction (The Directive)
+                                </label>
+                                <textarea 
+                                   rows={3}
+                                   placeholder="e.g., tell him to meet me 5 'o clock regarding the supplementary affidavit..."
+                                   value={newTeleInstruction}
+                                   onChange={(e) => setNewTeleInstruction(e.target.value)}
+                                   className="w-full bg-[#181d2c]/65 border border-[#6366f1]/10 rounded-xl px-4 py-3 text-white text-xs leading-relaxed font-semibold placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-sans focus:ring-0"
+                                   required
+                                />
+                             </div>
+
+                             <div className="flex gap-4 font-sans">
+                                <button
+                                   type="submit"
+                                   className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg active:scale-[0.98] cursor-pointer"
+                                >
+                                   {editingTeleId ? '💾 Save Directive' : '➕ Register Intercept Prompt'}
+                                </button>
+                                
+                                {editingTeleId && (
+                                   <button
+                                      type="button"
+                                      onClick={() => {
+                                         setEditingTeleId(null);
+                                         setNewTeleCaller('');
+                                         setNewTeleInstruction('');
+                                         setNewTeleNote('');
+                                      }}
+                                      className="px-5 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black text-slate-400 hover:bg-white/10 cursor-pointer font-sans"
+                                   >
+                                      Cancel
+                                   </button>
+                                )}
+                             </div>
+                          </form>
+                       </div>
+
+                       {/* Directives Ledger list */}
+                       <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 shadow-2xl flex flex-col font-sans">
+                          <h4 className="text-sm font-black uppercase tracking-wider text-white mb-6 flex items-center gap-2 text-left font-sans">
+                             <BookOpen className="w-4 h-4 text-amber-500" />
+                             Tele Intercept Ledger ({telePrompts.length})
+                          </h4>
+                          
+                          <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1 custom-scrollbar text-left font-sans">
+                             {telePrompts.length === 0 ? (
+                                <div className="text-center py-10 border border-dashed border-white/5 rounded-2xl">
+                                   <p className="text-slate-500 text-xs font-semibold">No active dial directives registered. Add a rule above.</p>
+                                </div>
+                             ) : (
+                                telePrompts.map((item) => (
+                                   <div 
+                                      key={item.id} 
+                                      className="p-5 bg-black/40 border border-white/5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-amber-500/20 transition-all group font-sans animate-in fade-in"
+                                   >
+                                      <div className="space-y-2 text-left flex-1 min-w-0 font-sans">
+                                         <div className="flex items-center gap-3 font-sans justify-start">
+                                            <span className="text-xs font-black uppercase text-white bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+                                               Caller: {item.caller}
+                                            </span>
+                                            {item.note && (
+                                               <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider truncate">
+                                                  ({item.note})
+                                               </span>
+                                            )}
+                                         </div>
+                                         <div className="bg-[#181d2c]/30 rounded-xl p-3 border border-indigo-500/5 font-sans text-left">
+                                            <div className="text-[8px] font-black text-amber-500/80 uppercase tracking-widest font-mono mb-1 text-left">Answering Instruction:</div>
+                                            <p className="text-xs text-slate-300 font-semibold leading-relaxed font-mono text-left">
+                                               "{item.instruction}"
+                                            </p>
+                                         </div>
+                                      </div>
+
+                                      <div className="flex sm:flex-col items-center sm:items-end justify-between gap-3 shrink-0 border-t sm:border-t-0 border-white/5 pt-3 sm:pt-0">
+                                         <button 
+                                            onClick={() => handleToggleTelePrompt(item.id)}
+                                            className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded cursor-pointer transition-all ${
+                                               item.isActive 
+                                                  ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 shadow-[0_0_10px_rgba(52,211,153,0.05)]' 
+                                                  : 'text-slate-500 bg-white/5 border border-white/5'
+                                            }`}
+                                         >
+                                            {item.isActive ? '● Active Intercept' : '○ Bypassed'}
+                                         </button>
+                                         
+                                         <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                            <button 
+                                               onClick={() => handleEditTelePrompt(item)}
+                                               className="px-2.5 py-1 bg-white/5 text-slate-400 hover:text-white rounded border border-white/10 text-[9px] font-black uppercase cursor-pointer"
+                                               title="Edit Rule"
+                                            >
+                                               Edit
+                                            </button>
+                                            <button 
+                                               onClick={() => handleDeleteTelePrompt(item.id)}
+                                               className="px-2 py-1 text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 rounded border border-rose-500/20 text-[9px] font-black cursor-pointer"
+                                               title="Delete Rule"
+                                            >
+                                               ✕
+                                            </button>
+                                         </div>
+                                      </div>
+                                   </div>
+                                ))
+                             )}
+                          </div>
+                       </div>
                     </div>
+
+                    {/* Right Column: AI Call Intercept Simulator */}
+                    <div className="flex flex-col gap-8">
+                       <div className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden text-left min-h-[500px] flex flex-col font-sans">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-2xl rounded-full pointer-events-none" />
+                          
+                          <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-4 text-left w-full">
+                             <div className="text-left font-sans">
+                                <h4 className="text-slate-500 text-[9px] font-black uppercase tracking-widest font-sans text-left">Routing Sandbox</h4>
+                                <h2 className="text-lg font-black uppercase tracking-widest text-[#cfd7e6] flex items-center gap-1.5 italic font-sans text-left">
+                                   <PhoneCall className="w-4 h-4 text-amber-500 not-italic shrink-0 animate-pulse" />
+                                   Simulate Routing Intercept
+                                </h2>
+                                <p className="text-slate-500 text-[9px] font-semibold uppercase tracking-widest mt-1.5 leading-normal text-left font-sans">
+                                   Verify the behavior of your active Tele-Prompts against simulated incoming telephone calls.
+                                </p>
+                             </div>
+                             <span className="text-[8px] font-black uppercase text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded bg-amber-500/10 shrink-0">Simulator Ready</span>
+                          </div>
+
+                          {/* Controls for Simulation */}
+                          <div className="space-y-6 mb-8 text-left bg-black/40 p-6 rounded-2xl border border-white/5 font-sans">
+                             <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-3 font-mono text-left">
+                                   Choose / Type simulated Caller Name:
+                                </label>
+                                <div className="flex gap-2 flex-wrap mb-3 justify-start font-sans">
+                                   {['Raju', 'Clerk', 'Landlord', 'John Doe'].map(name => (
+                                      <button 
+                                         key={name}
+                                         type="button"
+                                         onClick={() => setSimulatedCallerName(name)}
+                                         className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                            simulatedCallerName === name 
+                                               ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-bold' 
+                                               : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                                         }`}
+                                      >
+                                         {name}
+                                      </button>
+                                   ))}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-4 items-stretch font-sans">
+                                   <input 
+                                      type="text"
+                                      placeholder="Or type other custom name..."
+                                      value={simulatedCallerName}
+                                      onChange={(e) => setSimulatedCallerName(e.target.value)}
+                                      className="flex-1 bg-[#181d2c]/65 border border-white/5 rounded-xl px-4 py-2 text-white text-xs font-semibold placeholder-slate-600 focus:outline-none focus:border-amber-500 font-sans"
+                                   />
+                                   <button 
+                                      type="button"
+                                      onClick={handleSimulateCallTrigger}
+                                      className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest text-[9px] rounded-xl transition-all cursor-pointer shadow-lg active:scale-95"
+                                   >
+                                      Test Call Trigger
+                                   </button>
+                                </div>
+                             </div>
+                          </div>
+
+                          {/* Real-time simulation terminal / readout */}
+                          <div className="flex-1 flex flex-col font-sans">
+                             <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 font-mono text-left">
+                                Intercept Diagnostics Console Log:
+                             </div>
+                             
+                             <div className="flex-1 bg-black p-6 rounded-2xl border border-white/5 font-mono text-xs leading-relaxed min-h-[220px] flex flex-col justify-between">
+                                {simulationResult ? (
+                                   <div className="space-y-4 animate-in fade-in duration-300 font-mono">
+                                      <div className="flex items-start gap-2.5 font-mono">
+                                         <span className="text-amber-500 font-bold text-left font-mono">➜</span>
+                                         <p className="text-slate-400 text-left font-mono">
+                                            <span className="text-slate-600 font-bold font-mono">[16:44:20]</span> Intercept service online... Monitoring incoming SIP channels.
+                                         </p>
+                                      </div>
+                                      <div className="flex items-start gap-2.5 font-mono">
+                                         <span className="text-amber-500 font-bold text-left font-mono">➜</span>
+                                         <p className="text-slate-300 text-left font-mono">
+                                            <span className="text-slate-600 font-bold font-mono">[16:44:21]</span> {simulationResult.action}
+                                         </p>
+                                      </div>
+                                      
+                                      <div className="border border-white/5 bg-white/2 rounded-xl p-4 mt-3 font-mono">
+                                         <div className="text-[8px] font-black text-[#818cf8] uppercase tracking-widest mb-2 font-mono text-left">
+                                            AI Answering Speech Output:
+                                         </div>
+                                         <p className="text-xs text-white leading-relaxed italic text-left font-mono">
+                                            {simulationResult.status === 'matched' ? (
+                                               `"Hello, you have reached Adv. George's office. This is his AI Assistant. Adv. George requested me directly to tell you: ${simulationResult.matchedInstruction}"`
+                                            ) : (
+                                               `"Hello! Adv. George is currently in Court session. I am his AI deputy. Please state your query, I will record transcription record."`
+                                            )}
+                                         </p>
+                                      </div>
+                                   </div>
+                                ) : (
+                                   <div className="flex-1 flex flex-col items-center justify-center text-center py-10 opacity-40 font-sans">
+                                      <div className="w-10 h-10 border border-dashed border-slate-500 rounded-full flex items-center justify-center mb-3">
+                                         <Mic className="w-4 h-4 text-slate-400 animate-pulse" />
+                                      </div>
+                                      <p className="text-[10px] uppercase font-black text-slate-500 select-none font-sans">
+                                         No active simulation run. Enter a caller and press the Test button above.
+                                      </p>
+                                   </div>
+                                )}
+                                
+                                <div className="mt-4 pt-4 border-t border-white/5 flex justify-between text-[8px] text-slate-600 font-bold uppercase tracking-widest leading-none shrink-0 font-mono">
+                                   <span>Interception Node v3.1</span>
+                                   <span>Divert Type: SIP-BRIDGE</span>
+                                </div>
+                             </div>
+                          </div>
+
+                       </div>
+                    </div>
+
                  </div>
               </div>
             )}
@@ -1606,9 +2619,9 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'system-prompt' && (
-              <div className="w-full h-full flex flex-col p-12 overflow-hidden bg-[#020617] relative">
+              <div className="w-full h-full flex flex-col p-6 sm:p-12 overflow-y-auto bg-[#020617] relative custom-scrollbar">
                  <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
-                 <div className="z-10 flex flex-col h-full max-w-5xl mx-auto w-full">
+                 <div className="z-10 flex flex-col h-full min-h-[600px] max-w-5xl mx-auto w-full pb-12">
                     <div className="flex justify-between items-end mb-12">
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-3 italic">AI Core Logic</div>
@@ -1646,53 +2659,10 @@ Please provide an extremely precise, professional, and well-organized legal resp
               </div>
             )}
 
-            {view === 'toolbox' && (
-              <div className="w-full h-full flex flex-col items-center justify-center p-8 overflow-y-auto custom-scrollbar">
-                 <div className="w-full max-w-5xl min-h-[85%] bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-12 flex flex-col items-center justify-center shadow-2xl relative">
-                    <div className="absolute top-10 left-10">
-                      <div className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Legal Utility v3.1</div>
-                      <h2 className="text-3xl font-black uppercase tracking-tighter italic">Document<span className="text-slate-500 not-italic">Input & Conversion</span></h2>
-                    </div>
 
-                    {!toolboxImage && !isScanningToolbox && (
-                      <div className="flex flex-col items-center gap-10 text-center mt-12 animate-in fade-in zoom-in-95 duration-500">
-                        <div className="w-24 h-24 bg-indigo-500/10 rounded-[2rem] flex items-center justify-center border border-indigo-500/20 shadow-inner">
-                          <svg className="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        </div>
-                        <button onClick={() => { toggleHardware('camera'); setIsScanningToolbox(true); }} className="px-14 py-6 bg-indigo-600 rounded-2xl font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-500 transition-all shadow-2xl transform hover:scale-105">Open Legal Scanner</button>
-                      </div>
-                    )}
-
-                    {isScanningToolbox && (
-                      <div className="w-full max-w-2xl flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-8">
-                         <div className="relative aspect-[3/4] bg-black rounded-[2.5rem] overflow-hidden border-4 border-indigo-500/50 shadow-2xl">
-                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover grayscale-[0.1] contrast-125" />
-                            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500 shadow-[0_0_30px_rgba(79,70,229,1)] animate-[scan_3s_linear_infinite]" />
-                         </div>
-                         <div className="flex gap-6 justify-center">
-                           <button onClick={handleToolboxCaptureAndStop} className="px-12 py-5 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-slate-200 transition-all shadow-2xl">Capture Document</button>
-                           <button onClick={() => { setIsScanningToolbox(false); stopHardware(); }} className="px-10 py-5 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl font-black uppercase tracking-widest text-xs">Close Scanner</button>
-                         </div>
-                      </div>
-                    )}
-
-                    {toolboxImage && (
-                      <div className="flex flex-col items-center gap-12 w-full animate-in zoom-in-95 duration-700">
-                        <div className="relative w-full max-w-sm aspect-[3/4] bg-black rounded-[3rem] overflow-hidden border-4 border-white/10 shadow-2xl">
-                          <img src={toolboxImage} className="w-full h-full object-cover" alt="Captured document" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-10 w-full max-w-2xl">
-                          <button onClick={() => downloadPDF(true)} className="px-10 py-12 bg-rose-500/5 border border-rose-500/10 rounded-[3rem] text-[14px] font-black uppercase tracking-[0.2em] text-rose-400">PDF</button>
-                          <button onClick={() => downloadWord(true)} className="px-10 py-12 bg-indigo-500/5 border border-indigo-500/10 rounded-[3rem] text-[14px] font-black uppercase tracking-[0.2em] text-indigo-400">Word</button>
-                        </div>
-                      </div>
-                    )}
-                 </div>
-              </div>
-            )}
 
             {view === 'reading-room' && (
-               <div className="w-full h-full flex flex-col items-center justify-center p-4">
+               <div className="w-full h-full flex flex-col items-center justify-center p-4 overflow-y-auto custom-scrollbar">
                   <div className="w-full max-w-6xl h-full bg-[#0a0f1d] rounded-[3rem] border border-white/5 relative shadow-2xl overflow-hidden flex flex-col">
                     {cameraEnabled ? (
                        <div className="relative flex-1 bg-black">
@@ -1709,7 +2679,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'clients' && (
-              <div className="w-full h-full p-12 flex flex-col gap-10">
+              <div className="w-full h-full p-6 sm:p-12 flex flex-col gap-6 sm:gap-10 overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-end shrink-0">
                   <h3 className="text-5xl font-black tracking-tighter italic">Client<span className="text-slate-500 not-italic">Database</span></h3>
                 </div>
@@ -1734,201 +2704,108 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'consult' && (
-              <div className="w-full h-full flex flex-col p-8 md:p-12 gap-8 overflow-hidden bg-[#020617] relative animate-in fade-in duration-500">
-                {/* Visual glow on headers */}
+              <div className="w-full h-full flex flex-col bg-[#020617] relative animate-in fade-in duration-500 overflow-hidden">
+                {/* Visual glows and ambient backgrounds */}
                 <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/5 blur-[100px] rounded-full pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none" />
 
-                {/* Top Section / Header with Listening Indicator */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0 z-10">
-                  <div>
-                    <div className="text-[11px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2 italic">Direct AI Counsel</div>
-                    <h3 className="text-5xl font-black tracking-tighter">Live<span className="text-slate-500">Consultation</span></h3>
+                {/* Clean, minimalist header */}
+                <div className="px-6 py-4 sm:px-8 sm:py-5 border-b border-white/5 flex items-center justify-between bg-[#0a0f1d]/45 backdrop-blur-md shrink-0 z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-400">Direct Counsel</div>
+                      <h3 className="text-xl font-bold tracking-tight text-white">AI Consultation</h3>
+                    </div>
                   </div>
 
-                  {/* Graphic Listening Indication & Text */}
-                  <div className="flex items-center gap-4 bg-[#0a0f1d] border border-white/5 p-4 rounded-2xl shadow-xl">
-                    {/* The Graphic Indicator */}
-                    <div className="relative flex items-center justify-center w-12 h-12">
-                      {micEnabled && status === ConnectionStatus.CONNECTED ? (
-                        <>
-                          {/* Inner glowing pulse */}
-                          <div className="absolute inset-0 bg-emerald-500/15 rounded-full animate-ping pointer-events-none" />
-                          <div className="absolute w-8 h-8 bg-emerald-500/20 rounded-full animate-pulse flex items-center justify-center border border-emerald-400/40">
-                            <div className="w-3.5 h-3.5 bg-emerald-500 rounded-full animate-pulse" />
-                          </div>
-                          
-                          {/* Equalizer Wave effect inside indicator container */}
-                          <div className="absolute bottom-1.5 flex gap-0.5 justify-center">
-                            <span className="w-[3px] bg-emerald-400 rounded-full transition-all duration-75" style={{ height: `${Math.max(4, 20 * micLevel)}px` }} />
-                            <span className="w-[3px] bg-emerald-500 rounded-full transition-all duration-75" style={{ height: `${Math.max(6, 28 * micLevel * 1.3)}px` }} />
-                            <span className="w-[3px] bg-emerald-400 rounded-full transition-all duration-75" style={{ height: `${Math.max(4, 20 * micLevel * 0.7)}px` }} />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-slate-800/50 border border-white/5 flex items-center justify-center text-slate-500">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                          </svg>
-                        </div>
-                      )}
+                  <div className="flex items-center gap-3">
+                    {/* Tiny responsive status bar */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.02] border border-white/5">
+                      <span className={`w-2 h-2 rounded-full ${micEnabled && status === ConnectionStatus.CONNECTED ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 hidden sm:inline">
+                        {micEnabled && status === ConnectionStatus.CONNECTED ? 'Listening' : 'Standby'}
+                      </span>
                     </div>
 
-                    {/* Text Label explaining the state */}
-                    <div className="flex flex-col justify-center pr-2">
-                      <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">AI LISTENING STATE</span>
-                      {micEnabled && status === ConnectionStatus.CONNECTED ? (
-                        <span className="text-[11px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-                          ACTIVE & LISTENING
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                          STANDBY
-                        </span>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => setHistory([])}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-rose-400 border border-white/5 hover:border-rose-500/10 hover:bg-rose-500/5 transition-all cursor-pointer"
+                    >
+                      Reset Log
+                    </button>
                   </div>
                 </div>
 
-                {/* Main Split/Scroll Area */}
-                <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-8 z-10">
-                  {/* Left Column: Voice Status / Prompt Reference / Export Actions */}
-                  <div className="md:col-span-4 flex flex-col gap-6 min-h-0 overflow-y-auto no-scrollbar">
-                    {/* Live Visual Speech Level Bar */}
-                    <div className="bg-[#0a0f1d] border border-white/5 rounded-3xl p-6 flex flex-col gap-4 shadow-xl">
-                      <div className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Decibel Feed</div>
-                      <div className="h-4 bg-black/40 rounded-full border border-white/5 overflow-hidden p-0.5 flex relative">
-                        <div 
-                          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-75 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
-                          style={{ width: `${Math.min(100, Math.max(2, micLevel * 100))}%` }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[8px] font-black tracking-widest text-[#a5b4fc] select-none">
-                            {micEnabled && status === ConnectionStatus.CONNECTED ? `LEVEL: ${Math.floor(micLevel * 100)}dB` : 'MUTED'}
-                          </span>
+                {/* Scrollable Conversation Thread Container */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 md:p-8 space-y-6 z-10 flex flex-col min-h-0 bg-gradient-to-b from-[#0a0f1d]/20 to-black/40">
+                  <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col justify-between">
+                    {history.length === 0 && !userTranscription && !aiTranscription ? (
+                      <div className="my-auto flex flex-col items-center justify-center text-center p-8 gap-5 max-w-lg mx-auto">
+                        <div className="w-16 h-16 bg-[#0a0f1d] rounded-2xl flex items-center justify-center border border-white/5 text-slate-500 animate-bounce">
+                          <MessageSquare className="w-8 h-8 text-indigo-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-bold text-white tracking-wide">Nexus Legal Consultation Chat</h4>
+                          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                            Welcome to your conversation with Nexus AI. Ask anything about Kerala and general Indian laws, contracts, dispute resolutions, or consumer rights. You can type your request or turn on your microphone to speak with the AI counselor.
+                          </p>
                         </div>
                       </div>
-                      
-                      {/* Control buttons inside the page */}
-                      <div className="flex flex-col gap-2.5 mt-2">
-                        <button
-                          onClick={() => toggleHardware('mic')}
-                          className={`w-full py-3.5 rounded-xl font-black uppercase tracking-wider text-[10px] border transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                            micEnabled 
-                              ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20' 
-                              : 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-600/20'
-                          }`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                          </svg>
-                          {micEnabled ? 'Stop Listening' : 'Start Listening'}
-                        </button>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <button 
-                            onClick={() => downloadPDF(false)}
-                            className="py-3 bg-white/5 border border-white/5 hover:bg-white/10 text-slate-300 font-bold uppercase tracking-widest text-[9px] rounded-xl transition-all cursor-pointer"
+                    ) : (
+                      <div className="space-y-6 w-full pb-4">
+                        {history.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                           >
-                            Export PDF
-                          </button>
-                          <button 
-                            onClick={() => downloadWord(false)}
-                            className="py-3 bg-white/5 border border-white/5 hover:bg-white/10 text-slate-300 font-bold uppercase tracking-widest text-[9px] rounded-xl transition-all cursor-pointer"
-                          >
-                            Export DOC
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Pro Tip/Guidance Panel */}
-                    <div className="bg-[#0a0f1d] border border-white/5 rounded-3xl p-6 flex flex-col gap-4 shadow-xl flex-1 justify-between">
-                      <div className="space-y-4">
-                        <div className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Practice Advice</div>
-                        <h4 className="text-lg font-bold text-slate-200">Legal Consultation Live Case</h4>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          Consult real-time analysis against the currently active Core System Prompt. The model streams interactive responses over a low-latency secure digital audio uplink.
-                        </p>
-                      </div>
-
-                      <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${status === ConnectionStatus.CONNECTED ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                          <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest">
-                            Session Status: {status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Scrollable Consultation Text Transcript */}
-                  <div className="md:col-span-8 bg-[#0a0f1d] border border-white/5 rounded-3xl flex flex-col overflow-hidden shadow-2xl relative min-h-0">
-                    <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
-                      <span className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-300">Live Consultation Transcript</span>
-                      <button 
-                        onClick={() => setHistory([])}
-                        className="text-[9px] font-bold text-slate-500 hover:text-rose-400 uppercase tracking-widest transition-colors cursor-pointer"
-                      >
-                        Reset Log
-                      </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-gradient-to-b from-[#0a0f1d] to-black/30">
-                      {history.length === 0 && !userTranscription && !aiTranscription ? (
-                        <div className="h-full flex flex-col items-center justify-center text-center p-8 gap-5">
-                          <div className="w-16 h-16 bg-[#020617] rounded-2xl flex items-center justify-center border border-white/5 text-slate-600">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Transcript Empty</h4>
-                            <p className="text-xs text-slate-500 mt-2 max-w-sm">No live spoken interactions recorded. Enable listening and begin speaking to generate your legal consultation report, or use the input terminal below to type your enquiry.</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {history.map((item) => (
-                            <div 
-                              key={item.id} 
-                              className={`p-6 rounded-2xl border transition-all duration-300 ${
-                                item.role === 'user' 
-                                  ? 'bg-white/[0.02] border-white/10 ml-8' 
-                                  : 'bg-indigo-600/[0.04] border-indigo-500/20 mr-8'
+                            <div
+                              className={`max-w-[85%] rounded-3xl p-5 border transition-all ${
+                                item.role === 'user'
+                                  ? 'bg-slate-800/40 border-white/5 rounded-tr-none text-slate-100 shadow-md'
+                                  : 'bg-[#0f172a]/80 border-indigo-500/10 rounded-tl-none text-slate-200 shadow-lg shadow-indigo-950/20'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-2">
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${
-                                  item.role === 'user' ? 'text-indigo-400' : 'text-amber-500'
-                                }`}>
-                                  {item.role === 'user' ? 'User Question (Legal Enquiry)' : 'AI Counsel (Nexus Answer)'}
+                              <div className="flex items-center justify-between gap-4 mb-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                    item.role === 'user' ? 'text-indigo-400' : 'text-amber-500'
+                                  }`}>
+                                    {item.role === 'user' ? 'Client' : 'Nexus AI'}
+                                  </span>
+                                </div>
+                                <span className="text-[8px] font-bold text-slate-500/80 tracking-widest uppercase">
+                                  {item.role === 'user' ? 'Legal Query' : 'Direct Counsel'}
                                 </span>
-                                <span className="text-[8px] font-bold text-slate-600">RECORDED DEPOSITION</span>
                               </div>
-                              <p className={`text-[14px] leading-relaxed ${
-                                item.role === 'user' ? 'text-slate-200 italic font-medium' : 'text-slate-100 font-sans'
+                              <div className={`text-[14px] leading-relaxed select-text ${
+                                item.role === 'user' ? 'text-slate-200 whitespace-pre-wrap' : 'text-slate-100 font-sans'
                               }`}>
-                                {item.text}
-                              </p>
+                                {item.role === 'user' ? (
+                                  item.text
+                                ) : (
+                                  <div className="prose prose-invert max-w-none text-slate-100 font-sans">
+                                    <ReactMarkdown>{item.text}</ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
 
                               {item.role === 'ai' && (
-                                <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-4 text-xs text-slate-500 animate-in fade-in duration-200">
+                                <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-4 text-xs text-slate-500">
                                   <button
                                     onClick={() => handleCopyText(item.id, item.text)}
                                     className="flex items-center gap-1.5 hover:text-indigo-400 font-bold uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
-                                    title="Copy to Clipboard"
-                                    id={`copy-btn-${item.id}`}
                                   >
                                     {copiedId === item.id ? (
                                       <>
-                                        <Check className="w-3 h-3 text-emerald-400" />
+                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
                                         <span className="text-emerald-400">Copied!</span>
                                       </>
                                     ) : (
                                       <>
-                                        <Copy className="w-3 h-3 text-slate-400 hover:text-indigo-400" />
+                                        <Copy className="w-3.5 h-3.5" />
                                         <span>Copy</span>
                                       </>
                                     )}
@@ -1937,85 +2814,162 @@ Please provide an extremely precise, professional, and well-organized legal resp
                                   <button
                                     onClick={() => handleDownloadItem(item.text, item.id)}
                                     className="flex items-center gap-1.5 hover:text-[#a5b4fc] font-bold uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
-                                    title="Download text file"
-                                    id={`download-btn-${item.id}`}
                                   >
-                                    <Download className="w-3 h-3 text-slate-400 hover:text-indigo-400" />
+                                    <Download className="w-3.5 h-3.5" />
                                     <span>Download</span>
                                   </button>
 
                                   <button
                                     onClick={() => handleDeleteItem(item.id)}
                                     className="flex items-center gap-1.5 hover:text-rose-400 font-bold uppercase tracking-widest text-[9px] transition-colors cursor-pointer ml-auto"
-                                    title="Delete Answer"
-                                    id={`delete-btn-${item.id}`}
                                   >
-                                    <Trash2 className="w-3 h-3 text-slate-500 hover:text-rose-400" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                     <span>Delete</span>
                                   </button>
                                 </div>
                               )}
                             </div>
-                          ))}
+                          </div>
+                        ))}
 
-                          {/* Live Transcribing Wave */}
-                          {(userTranscription || aiTranscription) && (
-                            <div className="p-6 rounded-2xl bg-indigo-600/10 border border-indigo-500/30 animate-pulse mr-8">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-[#a5b4fc] flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 bg-[#a5b4fc] rounded-full animate-ping" />
-                                  Real-Time Streams
-                                </span>
-                                <span className="text-[8px] font-black text-indigo-400 tracking-widest animate-pulse">PROCESSING LIVE SIGNAL</span>
+                        {/* Live Transcribing Wave / Speech Indicators */}
+                        {(userTranscription || aiTranscription || isLiveThinking) && (
+                          <div className="space-y-4">
+                            {/* User spoke transcript block */}
+                            {userTranscription && (
+                              <div className="flex justify-end animate-in fade-in slide-in-from-right-2 duration-300">
+                                <div className="max-w-[85%] rounded-3xl rounded-tr-none p-5 bg-slate-800/40 border border-white/5 text-slate-100 shadow-md">
+                                  <div className="flex items-center justify-between gap-4 mb-2.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
+                                      Voice Query Received
+                                    </span>
+                                    <span className="text-[8px] font-bold text-slate-500 tracking-widest uppercase">Captured Live</span>
+                                  </div>
+                                  <p className="text-[14px] text-slate-200 leading-relaxed font-sans font-medium italic">
+                                    "{userTranscription}"
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-[14px] text-indigo-100 leading-relaxed font-sans">
-                                {userTranscription || aiTranscription}
-                              </p>
-                            </div>
-                          )}
+                            )}
 
-                          {/* Dynamic Direct Text Answer Generator Indicator */}
-                          {isAiGeneratingText && (
-                            <div className="p-6 rounded-2xl bg-indigo-950/45 border border-indigo-500/25 animate-pulse mr-8">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 flex items-center gap-2">
+                            {/* AI has finished receiving user query and is thinking/synthesizing voice feedback */}
+                            {isLiveThinking && !aiTranscription && (
+                              <div className="flex justify-start animate-in fade-in slide-in-from-left-2 duration-300">
+                                <div className="max-w-[85%] rounded-3xl rounded-tl-none p-5 bg-indigo-950/45 border border-indigo-500/20 text-indigo-100 shadow-lg shadow-indigo-950/20">
+                                  <div className="flex items-center justify-between gap-6 mb-2.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-[#a5b4fc] flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
+                                      AI Coding/Thinking...
+                                    </span>
+                                    <span className="text-[8px] font-bold text-indigo-400/80 tracking-widest uppercase">Synthesizing Voice Response</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-end gap-1 h-4 shrink-0">
+                                      <span className="w-1 h-3 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                                      <span className="w-1 h-4 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                                      <span className="w-1 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                                      <span className="w-1 h-3.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:450ms]" />
+                                    </div>
+                                    <p className="text-[14px] text-indigo-200 leading-relaxed font-sans italic">
+                                      Nexus AI is formatting a legal reply. Please wait for voice response...
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* AI is speaking the response */}
+                            {aiTranscription && (
+                              <div className="flex justify-start animate-in fade-in slide-in-from-left-2 duration-300">
+                                <div className="max-w-[85%] rounded-3xl rounded-tl-none p-5 bg-[#0f172a]/80 border border-indigo-500/10 text-slate-100 shadow-xl shadow-indigo-950/20 mr-auto">
+                                  <div className="flex items-center justify-between gap-4 mb-2.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                                      Nexus AI Speaking
+                                    </span>
+                                    <span className="text-[8px] font-bold text-amber-500/80 tracking-widest uppercase font-mono">Live Broadcast</span>
+                                  </div>
+                                  <p className="text-[14px] text-slate-200 leading-relaxed font-sans">
+                                    {aiTranscription}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Processing Answer Indicator */}
+                        {isAiGeneratingText && (
+                          <div className="flex justify-start animate-pulse">
+                            <div className="max-w-[85%] rounded-3xl rounded-tl-none p-5 bg-indigo-950/20 border border-indigo-500/10 text-indigo-200">
+                              <div className="flex items-center justify-between gap-4 mb-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 flex items-center gap-1.5">
                                   <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
-                                  Processing
+                                  Thinking
                                 </span>
-                                <span className="text-[8px] font-black text-indigo-400 tracking-widest animate-pulse">GENERATING COGNITIVE LOGIC</span>
+                                <span className="text-[8px] font-black text-indigo-400/80 tracking-widest uppercase">Formulating Response</span>
                               </div>
-                              <p className="text-[14px] text-indigo-200/70 leading-relaxed font-sans italic">
+                              <p className="text-[14px] text-indigo-300/80 leading-relaxed font-sans italic">
                                 Nexus AI is formulating a legal consultation reply...
                               </p>
                             </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                    {/* DIRECT TEXT ENTRY FORM */}
-                    <form onSubmit={handleTextSubmit} className="p-6 border-t border-white/5 bg-[#050914] flex gap-3 shrink-0">
-                      <input 
+                {/* Conversation Input Bar container */}
+                <div className="p-4 sm:p-6 pb-24 sm:pb-32 md:pb-28 border-t border-white/5 bg-[#050914] shrink-0 z-10">
+                  <div className="max-w-4xl mx-auto w-full relative">
+
+                    <form onSubmit={handleTextSubmit} className="flex gap-2.5 items-center">
+                      {/* Audio Level Bar for Mic if connected & active */}
+                      {micEnabled && status === ConnectionStatus.CONNECTED && (
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-indigo-500/10 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all duration-75"
+                            style={{ width: `${Math.min(100, Math.max(0, micLevel * 100))}%` }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Microphone Toggle quick button inside conversation input bar */}
+                      <button
+                        type="button"
+                        onClick={() => toggleHardware('mic')}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                          micEnabled 
+                            ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20 shadow-lg shadow-rose-950/20' 
+                            : 'bg-white/[0.02] border-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                        }`}
+                        title={micEnabled ? 'Mute Speech Intake' : 'Enable Voice Consultation'}
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+
+                      <input
                         type="text"
                         value={textInput}
                         onChange={(e) => setTextInput(e.target.value)}
-                        placeholder="Type legal questions or case inquiries directly here..."
-                        className="flex-1 bg-black/60 border border-white/10 rounded-2xl px-5 py-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        placeholder={micEnabled && status === ConnectionStatus.CONNECTED ? "Speak now or type your legal question here..." : "Type legal question or case enquiry here..."}
+                        className="flex-1 bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/20 focus:bg-black/60 transition-all"
                         disabled={isAiGeneratingText}
                       />
-                      <button 
+
+                      <button
                         type="submit"
                         disabled={isAiGeneratingText || !textInput.trim()}
-                        className="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-2"
+                        className="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-600/20 disabled:opacity-30 disabled:hover:bg-indigo-600 disabled:hover:shadow-none text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all cursor-pointer flex items-center gap-2 shrink-0"
                       >
                         {isAiGeneratingText ? (
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
+                          <Send className="w-4 h-4" />
                         )}
-                        <span>Enquire</span>
+                        <span className="hidden sm:inline">Enquire</span>
                       </button>
                     </form>
                   </div>
@@ -2024,11 +2978,19 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'archive' && (
-              <div className="w-full h-full flex items-center justify-center p-8">
-                 <div className="w-full max-w-4xl h-full bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-16 flex flex-col items-center justify-center opacity-40 shadow-2xl">
+              <div className="w-full h-full flex items-center justify-center p-8 overflow-y-auto custom-scrollbar">
+                 <div className="w-full max-w-4xl min-h-[400px] h-full bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-16 flex flex-col items-center justify-center opacity-40 shadow-2xl">
                     <h2 className="text-3xl font-black uppercase tracking-[0.3em] mb-6 italic">Nexus Archive</h2>
                     <p className="text-[12px] font-bold uppercase tracking-[0.5em] text-indigo-400">Advanced Legal Logic Engine v3.1</p>
                  </div>
+              </div>
+            )}
+
+            {view === 'contract' && (
+              <div className="w-full h-full flex items-start justify-center p-2 md:p-6 overflow-y-auto custom-scrollbar bg-[#070b14]">
+                <div className="w-full max-w-7xl">
+                  <ContractEngine />
+                </div>
               </div>
             )}
 
@@ -2600,7 +3562,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'convert' && (
-              <div className="h-full w-full p-3 md:p-6 flex flex-col overflow-hidden bg-[#070b14] relative text-slate-300">
+              <div className="h-full w-full p-3 md:p-6 flex flex-col overflow-y-auto md:overflow-hidden bg-[#070b14] relative text-slate-300 custom-scrollbar">
                 {/* Mobile Slider Navigation */}
                 <div className="flex md:hidden bg-[#090e18] border border-white/10 p-2.5 justify-around items-center shrink-0 z-30 select-none mb-3 rounded-2xl">
                   <button 
@@ -2856,7 +3818,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'knowledge' && (
-              <div className="h-full w-full p-6 flex flex-col overflow-hidden bg-[#070b14] relative text-slate-300">
+              <div className="h-full w-full p-6 flex flex-col overflow-y-auto md:overflow-hidden bg-[#070b14] relative text-slate-300 custom-scrollbar">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 shrink-0">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 mb-1">Knowledge Hub</div>
@@ -3410,36 +4372,216 @@ Please provide an extremely precise, professional, and well-organized legal resp
                 </div>
               </div>
             )}
-          </div>
 
           {/* GLOBAL HARDWARE DOCK - Only show in Advocate Portal */}
           {isAdvocatePortal && (
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-5 z-[500] w-full max-w-md px-6 pointer-events-none">
-              <div className="bg-black/90 backdrop-blur-3xl p-4 rounded-[3rem] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.9)] flex items-center gap-4 pointer-events-auto">
-                <button onClick={() => toggleHardware('camera')} className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 border-2 cursor-pointer ${cameraEnabled ? 'bg-indigo-600 border-indigo-400 text-white shadow-[0_0_30px_rgba(79,70,229,0.6)] transform scale-110' : 'bg-white/5 border-white/10 text-slate-500 hover:text-slate-300'}`}>
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            <div className="hardware-dock-center flex flex-col items-center gap-5 z-[1000] w-[calc(100%-80px)] sm:w-auto max-w-xs sm:max-w-md px-4 sm:px-6 pointer-events-none animate-in slide-in-from-bottom-5 duration-500">
+              
+              {/* COMPACT FLOATING VOICE & SIGHT CONSOLE AREA - RENDERED DIRECTLY ABOVE CONTROLS */}
+              {(micEnabled || cameraEnabled) && (
+                <div id="immersive-voice-sight-console" className="w-full sm:w-80 pointer-events-auto animate-in fade-in slide-in-from-bottom-6 duration-300">
+                  <div className="w-full bg-[#050915]/95 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-4 flex flex-col gap-3 text-center select-none relative animate-in zoom-in-95 duration-200">
+                    
+                    {/* Subtle internal glowing spots */}
+                    <div className="absolute -top-6 -left-6 w-24 h-24 bg-indigo-500/5 blur-[30px] rounded-full pointer-events-none" />
+                    <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-amber-500/5 blur-[30px] rounded-full pointer-events-none" />
+
+                    {/* Header controls */}
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2 w-full z-10 select-none">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${
+                          status === ConnectionStatus.CONNECTED ? 'bg-emerald-500 animate-pulse' : 
+                          status === ConnectionStatus.CONNECTING ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'
+                        }`} />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300">
+                          {status === ConnectionStatus.CONNECTED ? 'Secure Voice Channel' : 
+                           status === ConnectionStatus.CONNECTING ? 'Bridging Vocals...' : 'Offline'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => stopHardware()} 
+                        className="p-1 hover:bg-white/5 rounded text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                        title="Close Vocal Feed"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* COMPACT CAMERA VIEW (Only if camera is enabled) */}
+                    {cameraEnabled && (
+                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-indigo-500/20 bg-black relative shadow-lg animate-in zoom-in-95 duration-300 z-10">
+                        <video 
+                          ref={videoRef} 
+                          autoPlay 
+                          playsInline 
+                          muted 
+                          className="w-full h-full object-cover grayscale-[0.1] focus:outline-none" 
+                        />
+                        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded border border-white/10 flex items-center gap-1 select-none">
+                          <span className="w-1 h-1 bg-rose-500 rounded-full animate-pulse" />
+                          <span className="text-[7px] font-black uppercase tracking-widest text-slate-300">Sight Stream</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* GRAPHIC INDICATOR: VoiceVisualizer */}
+                    <div className="w-full flex items-center justify-center py-1 z-10 select-none">
+                      <VoiceVisualizer 
+                        volume={micLevel} 
+                        isModelSpeaking={!!aiTranscription} 
+                        isConnected={status === ConnectionStatus.CONNECTED}
+                        isThinking={isLiveThinking}
+                      />
+                    </div>
+
+                    {/* DYNAMIC TEXT AREA: Resizes automatically */}
+                    <div className="w-full flex flex-col gap-2 z-10 text-left select-text">
+                      {/* Spoken Query of the user */}
+                      {userTranscription && (
+                        <div className="text-xs font-semibold text-indigo-300 italic tracking-wide max-h-24 overflow-y-auto custom-scrollbar select-text leading-relaxed px-1">
+                          "{userTranscription}"
+                        </div>
+                      )}
+
+                      {/* AI Reply or Thinking Status */}
+                      {aiTranscription ? (
+                        <div className="bg-[#0c0f1b]/95 border border-indigo-500/10 rounded-xl p-3 max-h-56 overflow-y-auto custom-scrollbar shadow-inner animate-in fade-in duration-300">
+                          <div className="text-[9px] font-black uppercase text-amber-500 tracking-widest mb-1 select-none">
+                            Legal Counsel response
+                          </div>
+                          <div className="text-[12px] leading-relaxed text-slate-200 select-text whitespace-pre-wrap font-sans">
+                            {aiTranscription}
+                          </div>
+                        </div>
+                      ) : isLiveThinking ? (
+                        <div className="bg-[#0b0f19]/60 border border-indigo-500/5 rounded-xl p-2.5 flex items-center gap-2 animate-pulse">
+                          <div className="flex gap-0.5 h-2.5 items-end shrink-0">
+                            <span className="w-0.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms] h-1.5" />
+                            <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:150ms] h-2.5" />
+                            <span className="w-0.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms] h-1.5" />
+                          </div>
+                          <p className="text-[9px] text-indigo-300 italic font-bold uppercase tracking-wider">Formulating response...</p>
+                        </div>
+                      ) : status === ConnectionStatus.ERROR ? (
+                        <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-2.5">
+                          <div className="text-[9px] font-black uppercase text-rose-400 tracking-widest mb-0.5 select-none">
+                            ⚠️ Stream Permission Fault
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-snug">
+                            Check browser permissions for microphone and camera.
+                          </p>
+                        </div>
+                      ) : !userTranscription && (
+                        <div className="text-[10px] text-slate-500 italic text-center py-1 select-none border border-dashed border-white/5 rounded-xl bg-white/[0.01]">
+                          🎙️ Speak Malayalam or English now...
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-black/90 backdrop-blur-3xl p-2.5 sm:p-4 rounded-[2.2rem] sm:rounded-[3rem] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.95)] flex items-center gap-3 sm:gap-4 pointer-events-auto">
+                <button 
+                  onClick={() => toggleHardware('camera')} 
+                  className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 border-2 cursor-pointer ${
+                    cameraEnabled ? 'bg-indigo-600 border-indigo-400 text-white shadow-[0_0_30px_rgba(79,70,229,0.6)] transform scale-110' : 'bg-white/5 border-white/10 text-slate-500 hover:text-slate-300'
+                  }`}
+                  title={cameraEnabled ? "Turn off Camera stream" : "Turn on Camera stream"}
+                >
+                  <svg className="w-5 h-5 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
                 </button>
-                <button onClick={() => toggleHardware('mic')} className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 border-2 cursor-pointer ${micEnabled ? 'bg-indigo-600 border-indigo-400 text-white shadow-[0_0_30px_rgba(79,70,229,0.6)] transform scale-110' : 'bg-rose-500/10 border-rose-500/20 text-rose-500 hover:text-rose-400'}`}>
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                </button>
-                <div className="h-10 w-px bg-white/10 mx-3" />
-                <div className="px-6 flex flex-col justify-center">
-                   <span className="text-[11px] font-black uppercase tracking-[0.4em] text-indigo-400 leading-none">Nexus Link</span>
-                   <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mt-2">{status === ConnectionStatus.CONNECTED ? 'UPLINK STABLE' : 'OFFLINE'}</span>
+                
+                {micEnabled || cameraEnabled ? (
+                  <button 
+                    onClick={() => stopHardware()} 
+                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-300 bg-rose-500 border border-rose-400 text-white shadow-[0_0_25px_rgba(239,68,68,0.5)] cursor-pointer transform hover:scale-105 active:scale-95"
+                    title="Close Voice/Sight bridge"
+                  >
+                    <X className="w-5 h-5 sm:w-7 sm:h-7" />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => toggleHardware('mic')} 
+                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 border-2 cursor-pointer bg-rose-500/10 border-rose-500/20 text-rose-500 hover:text-rose-400"
+                    title="Initiate Voice bridge"
+                  >
+                    <svg className="w-5 h-5 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </button>
+                )}
+
+                <div className="hidden sm:block h-10 w-px bg-white/10 mx-2 sm:mx-3" />
+                <div className="hidden sm:flex px-2 sm:px-6 flex-col justify-center select-none">
+                   <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 leading-none">NEXUS LINK</span>
+                   <span className="text-[9px] font-bold uppercase tracking-widest mt-2 flex items-center gap-1.5">
+                     <span className={`w-1.5 h-1.5 rounded-full ${
+                       micEnabled || cameraEnabled 
+                         ? (status === ConnectionStatus.CONNECTED ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-pulse') 
+                         : 'bg-slate-500'
+                     }`} />
+                     <span className={
+                       micEnabled || cameraEnabled 
+                         ? (status === ConnectionStatus.CONNECTED ? 'text-emerald-400' : 'text-amber-400') 
+                         : 'text-slate-500'
+                     }>
+                       {micEnabled || cameraEnabled 
+                         ? (status === ConnectionStatus.CONNECTED ? 'ACTIVE' : 'BRIDGING...') 
+                         : 'OFFLINE'}
+                     </span>
+                   </span>
                 </div>
               </div>
             </div>
           )}
+          </div>
         </main>
       </div>
 
       <style>{`
+        .hardware-dock-center {
+          position: fixed;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        @media (min-width: 768px) {
+          .hardware-dock-center {
+            bottom: 40px;
+          }
+        }
+        @media (min-width: 640px) {
+          .hardware-dock-center {
+            left: calc(50% - 88px);
+            transform: none;
+          }
+        }
+
         @keyframes scan { 0% { transform: translateY(0); } 100% { transform: translateY(100vh); } }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #312e81; border-radius: 10px; }
+        
+        /* Thin blue vertical slide bar for sidebar scrolling */
+        .sidebar-scrollbar::-webkit-scrollbar { width: 3px; }
+        .sidebar-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 10px; }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
+        .sidebar-scrollbar { scrollbar-width: thin; scrollbar-color: #2563eb rgba(255, 255, 255, 0.02); }
+
+        /* Thin blue horizontal slide bar for top navigation menu scrolling */
+        .custom-horizontal-scrollbar::-webkit-scrollbar { height: 3px; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.01); }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 10px; }
+        .custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover { background: #60a5fa; }
+        .custom-horizontal-scrollbar { scrollbar-width: thin; scrollbar-color: #2563eb rgba(255, 255, 255, 0.01); }
+        
         * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </div>
