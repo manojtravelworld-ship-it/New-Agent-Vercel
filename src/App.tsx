@@ -7,7 +7,7 @@ import { ConnectionStatus } from './types';
 import { jsPDF } from 'jspdf';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
-import { Copy, Check, Trash2, Download, Maximize2, Minimize2, RotateCcw, Zap, BookOpen, ChevronRight, AlertTriangle, AlertCircle, Info, Send, Anchor, Plus, X, Camera, Globe, Search, FileText, File, CheckCircle, Upload, Cpu, Mic, Volume2, Sparkles, User, MessageSquare, PhoneCall, Phone } from 'lucide-react';
+import { Copy, Check, Trash2, Download, Maximize2, Minimize2, RotateCcw, Zap, BookOpen, ChevronRight, AlertTriangle, AlertCircle, Info, Send, Anchor, Plus, X, Camera, Globe, Search, FileText, File, CheckCircle, Upload, Cpu, Mic, Volume2, VolumeX, Sparkles, User, MessageSquare, PhoneCall, Phone, Archive } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import ContractEngine from './components/ContractEngine';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
@@ -69,6 +69,14 @@ interface CaseCitation {
   paragraph: string;
   court: 'Supreme Court' | 'High Court';
   selected: boolean;
+}
+
+interface ArchiveItem {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: string;
+  type: string;
 }
 
 const parseCitations = (text: string): CaseCitation[] => {
@@ -327,6 +335,11 @@ const DEFAULT_CALL_RECORDS: CallRecord[] = [
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('home');
+  const currentViewRef = useRef<AppView>(view);
+  useEffect(() => {
+    currentViewRef.current = view;
+  }, [view]);
+
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -344,6 +357,15 @@ const App: React.FC = () => {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reading Room OCR/Scan States
+  const [readingRoomScanPhase, setReadingRoomScanPhase] = useState<'idle' | 'scanning' | 'analyzing' | 'done' | 'error'>('idle');
+  const [readingRoomScanResult, setReadingRoomScanResult] = useState<{
+    summary: string;
+    extractedText: string;
+    statutoryActs: string[];
+  } | null>(null);
+  const [readingRoomActiveTab, setReadingRoomActiveTab] = useState<'summary' | 'ocr' | 'statutory'>('summary');
 
   // Tele Prompt State
   const [telePrompts, setTelePrompts] = useState<TelePromptItem[]>(() => {
@@ -761,6 +783,27 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<{role: 'user' | 'ai', text: string, id: number}[]>([]);
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
+  const [archives, setArchives] = useState<ArchiveItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('nexus_archives');
+      return stored ? JSON.parse(stored) : [
+        {
+          id: 'initial-arch-1',
+          title: 'Section 124 Claims Reference (Railways Act)',
+          content: 'Applicable in cases of passenger injuries due to active accidents on railway properties. Outlines rights to claim prompt compensations with details on tribunal proceedings.',
+          timestamp: '16/02/2026, 11:20 AM',
+          type: 'Statute Reference'
+        }
+      ];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('nexus_archives', JSON.stringify(archives));
+  }, [archives]);
+
   // Drafting Page States
   const [draftPages, setDraftPages] = useState<string[]>(["IN THE COURT OF THE DISTRICT JUDGE OF ERNAKULAM\n\nDISPUTE CASE NO. 104 OF 2026\n\nBETWEEN:\nSreedharan K.\t\t...Petitioner\nAND\nNeighboring Owner\t\t...Respondent\n\nPETITION FOR INTERIM INJUNCTION UNDER ORDER XXXIX RULES 1 & 2 OF CPC\n\nMost Respectfully Showeth:\n1. The Petitioner is the absolute owner and in peaceful possession of the property described in the schedule hereunder.\n2. The Respondent is the owner of the property on the immediate southern boundary of the Petitioner's property.\n3. On 14/02/2026, the Respondent commenced unauthorized fence construction encroaching onto the Petitioner's boundary.\n\nTherefore, the Petitioner prays for a temporary injunction restraining the Respondent from carrying out any further construction.\n\nDate: 16/02/2026\nAdvocate for Petitioner\n\nVERIFICATION\nI, Sreedharan K., do hereby verify that the contents of paragraphs 1 to 3 are true to my personal knowledge.\n\nPetitioner"]);
   const [deskInput, setDeskInput] = useState('');
@@ -787,7 +830,306 @@ const App: React.FC = () => {
   const [newDirectiveName, setNewDirectiveName] = useState('');
   const [newDirectivePrompt, setNewDirectivePrompt] = useState('');
 
+  // Active Litigation Intelligence & Statutory Win Strategy States
+  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
+  const [draftAnalysisReport, setDraftAnalysisReport] = useState<{
+    lawsInvolved: { title: string; provision: string; relevance: string }[];
+    challenges: { title: string; risk: string; mitigation: string }[];
+    changesNeeded: { title: string; instruction: string; impact: string }[];
+  }>({
+    lawsInvolved: [
+      {
+        title: "Order XXXIX, Rules 1 & 2",
+        provision: "Code of Civil Procedure, 1908",
+        relevance: "Governs temporary injunctions. Primary mechanism to halt unauthorized encroachment and maintain the status quo of petitioner's Aluva property."
+      },
+      {
+        title: "Section 38 & 39",
+        provision: "Specific Relief Act, 1963",
+        relevance: "Provides the legal standard for granting perpetual and mandatory injunctions on boundary disputes."
+      },
+      {
+        title: "Section 110 (Burden of Proof)",
+        provision: "Indian Evidence Act, 1872",
+        relevance: "Sets standard where the claimant must construct a prima facie demonstration of active physical possession."
+      }
+    ],
+    challenges: [
+      {
+        title: "Absence of Commission Boundary Report",
+        risk: "Courts regularly deny ad-interim injunctions if boundaries are vague or disputed without actual land surveyor verification.",
+        mitigation: "Draft an urgent application under Order XXVI Rule 9 of CPC for appointment of an Advocate Commissioner."
+      },
+      {
+        title: "Laches / Unreasonable Delay",
+        risk: "If construction is allowed to complete substantially before filing, court may decline injunction on balance of convenience.",
+        mitigation: "Assert precise immediate timeline of oral protests and continuous possession indicators to show high vigilance."
+      }
+    ],
+    changesNeeded: [
+      {
+        title: "Integrate the 'Golden Tripod' Clause",
+        instruction: "Include a distinct sub-heading detailing: (1) Prima Facie Case, (2) Balance of Convenience, and (3) Irreparable Injury.",
+        impact: "Fulfills standard judicial checklists for Order XXXIX, securing favorable evaluation on first hearing."
+      },
+      {
+        title: "Specify Boundary Encroachment Scale",
+        instruction: "Detail exact measurements of the disputed strip and include photographs with temporary boundary descriptions.",
+        impact: "Saves petition from rejection on ground of vagueness or indefiniteness of the relief."
+      }
+    ]
+  });
+
+  // AI Case Win Strategy & Voice Drafting States
+  const [voiceOutputPlaying, setVoiceOutputPlaying] = useState(false);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const [voiceInputText, setVoiceInputText] = useState('');
+  const [selectedTurnId, setSelectedTurnId] = useState<number | null>(null);
+
+  interface CaseStrategy {
+    provisions: string[];
+    strengths: string[];
+    strategies: string[];
+    evidence: string[];
+    audioBriefing: string;
+    draftFacts: string;
+    suggestedPleadingsTitle: string;
+  }
+
+  const getCaseStrategy = (record: VoiceRecord | null): CaseStrategy => {
+    if (!record) {
+      return {
+        provisions: [],
+        strengths: [],
+        strategies: [],
+        evidence: [],
+        audioBriefing: "",
+        draftFacts: "",
+        suggestedPleadingsTitle: "Legal Complaint"
+      };
+    }
+
+    const name = record.clientName.toLowerCase();
+    
+    if (name.includes('sreedharan')) {
+      return {
+        provisions: [
+          "Order 39 Rules 1 & 2 of the Civil Procedure Code (CPC), 1908",
+          "Section 34 & 37 of the Specific Relief Act, 1963",
+          "Kerala Land Conservancy Rules & Boundaries Act Guidelines"
+        ],
+        strengths: [
+          "Absolute registered sale deed holder in peaceful possession",
+          "Verified 2025 Kerala government surveyor sketch with marker stone coordinates",
+          "Evidence of immediate, ongoing brick and concrete construction past boundaries"
+        ],
+        strategies: [
+          "Immediate Ex-Parte Ad-Interim Injunction: Move the court under Order 39 CPC to arrest status quo before neighbor sets brick wall.",
+          "Visual Encroachment Demonstration: Submit time-stamped photographs showing active trespass past boundary stones.",
+          "Advocate Commission Appointment: Request a neutral Court Commissioner to inspect site and file report under Order 26 CPC."
+        ],
+        evidence: [
+          "Notarized Property Title Deed",
+          "Verified 2025 Survey Sketch",
+          "Site photographs of active concrete mixture and materials"
+        ],
+        audioBriefing: "For Sreedharan, our winning strategy consists of filing an urgent temporary injunction petition under Order 39 Rules 1 and 2 of the CPC. We must prove active encroachment past the physical boundary stones. Should we proceed with drafting the legal complaint?",
+        draftFacts: `Client: Sreedharan K.\nLocation: Aluva, Ernakulam, Kerala.\nCase Facts: Immediate southern neighbor has crossed the surveyed property boundary line by over two feet. Neighbor is actively constructing a concrete compound fence past the registered surveyor marker stones.\nEvidence: 2025 verified government survey sketch and registered title deeds are intact.\nRelief Claimed: Permanent prohibitory injunction against trespass and urgent ad-interim temporary injunction under CPC Order 39 Rules 1 and 2.`,
+        suggestedPleadingsTitle: "Injunction Suit (Order XXXIX Rules 1 & 2 CPC)"
+      };
+    } else if (name.includes('elena') || name.includes('rodriguez')) {
+      return {
+        provisions: [
+          "Section 51 & 55 of the Indian Copyright Act, 1957",
+          "Section 2(1)(i) of the Commercial Courts Act, 2015",
+          "Section 27 of the Indian Contract Act, 1872 (NDA Violations)"
+        ],
+        strengths: [
+          "Signed contractor IP assignment covenants and strict NDA rules",
+          "Detailed server logs proving software code checkout just prior to account deletion",
+          "Proprietary matching algorithm is functionally identical to the clone software"
+        ],
+        strategies: [
+          "Urgent Code Protection Injunction: Seek an ex-parte restraint to prevent deployment of cloned matching software.",
+          "Evidence Preservation Petition: File under CPC Order 26 for appointment of forensic software expert to seize code backups.",
+          "Section 65B Electronic Evidence Affidavit: Attach full checked-out GitHub commit logs and access trails."
+        ],
+        evidence: [
+          "Executed NDA & Joint Intellectual Property Assignment Deed",
+          "Electronic Server Access Logs & git transaction records",
+          "Side-by-side matching algorithm AST difference analysis"
+        ],
+        audioBriefing: "In Elena's proprietary software dispute, our core strategy relies on the copyright assignment covenants. We will move the Commercial Court for a rapid ex-parte software publication halt under Section 55 of the Copyright Act. Shall we proceed with drafting?",
+        draftFacts: `Client: Elena Rodriguez / Phoenix Tech Corp.\nCase Facts: Former independent consulting developer has cloned and launched proprietary matching algorithms in breach of matching IP assignment contracts and trade secret guidelines.\nEvidence: Logs showing GitHub exports up to 48 hours prior to resource de-provisioning.\nRelief Claimed: Ex-Parte ad-interim injunction preventing launch and publication, and damages for code infringement.`,
+        suggestedPleadingsTitle: "Commercial Plaint for Copyright Infringement & Trade Secret Misappropriation"
+      };
+    } else if (name.includes('manoj') || name.includes('kumar')) {
+      return {
+        provisions: [
+          "Section 106 & 111(a) of the Transfer of Property Act, 1882",
+          "Section 18 of Rent Control and Eviction Standards",
+          "Article 141 of Indian Limitation Act, 1963"
+        ],
+        strengths: [
+          "Written commercial lease deed expired on January 31, 2026 by efflux of time",
+          "Prior written eviction and vacate notices delivered and registered",
+          "Clear double rent penalty provision for holdover period"
+        ],
+        strategies: [
+          "Summary Suit for Eviction: Rent control/civil court petition for recovery of possession since lease is terminated.",
+          "Covenant Independence Plea: Establish that landlord security deposit interest disputes cannot serve as legal excuse to occupy.",
+          "Claim Double Rent Penalty: Force tenant compliance and leverage negotiations by claiming the 200% Daily Holdover rate."
+        ],
+        evidence: [
+          "Registered Commercial Lease Deed (Expired)",
+          "Delivered Registered Eviction Notices with Postal Ack Cards",
+          "Bank deposit ledgers showing zero rent payments post expiry"
+        ],
+        audioBriefing: "For Manoj Kumar, we are filing a summary tenant eviction suit. The lease has expired by efflux of time, so the tenant is considered a tenant at sufferance. We must separate deposit disputes from vacant possession duties and assert double-rent. Shall we draft the eviction plaint?",
+        draftFacts: `Client: Manoj Kumar.\nCase Facts: Commercial lease expired on January 31, 2026. Commercial tenant refuses to vacate, raising claims on security deposit interest which are outside express covenants.\nEvidence: Notarized lease contract and delivered vacate notice.\nRelief Claimed: Eviction of tenant, recovery of rent dues, and mesne profits calculated at double-rent penalty under Clause 14.4 post lease effluxion.`,
+        suggestedPleadingsTitle: "Summary Eviction Plaint & Recovery of Possession (Transfer of Property Act)"
+      };
+    } else {
+      const caseType = record.caseType || "Legal Dispensation";
+      return {
+        provisions: [
+          "Relevant Civil, Criminal, or Commercial Codes under Indian Law",
+          "Section 34 of Specific Relief Act and Statutory Compensation Norms",
+          "Applicable Civil Practice Rules"
+        ],
+        strengths: [
+          `Documentary audio transcripts indicating client status: ${record.clientName}`,
+          "Specific verbal agreements or correspondence on records",
+          "Actionable timeline details in voice receipts"
+        ],
+        strategies: [
+          "Immediate Cease-and-Desist Demands: Serve an urgent legal dispatch setting up a tight 48-hour deadline.",
+          "Seek Preventive Remedial Measures: File a standard preventive civil application under Section 94 CPC.",
+          "Evidence Compilation: Secure matching visual or contract signatures before any destruction of proof."
+        ],
+        evidence: [
+          "Client voice transcript logs",
+          "Written notification or notices sent",
+          "Site inspection or record ledger files"
+        ],
+        audioBriefing: `For client ${record.clientName}, we must secure immediate legal protections. We will mount a suit to safeguard their interests and demand urgent damages. Shall we start drafting?`,
+        draftFacts: `Client: ${record.clientName}\nCase Type: ${caseType}\nSummary of Facts: ${record.summary}\nRecord details: Recorded duration: ${record.duration} on ${record.date}.`,
+        suggestedPleadingsTitle: `Urgent Plaint for ${caseType}`
+      };
+    }
+  };
+
+  const speakText = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = () => {
+        setVoiceOutputPlaying(false);
+      };
+      utterance.onerror = () => {
+        setVoiceOutputPlaying(false);
+      };
+      setVoiceOutputPlaying(true);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setNotification("🔊 Speech Synthesis is not supported in this browser environment.");
+    }
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setVoiceOutputPlaying(false);
+    }
+  };
+
+  const startVoiceCapture = (recordToDraft: VoiceRecord | null) => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setNotification("🎙️ Web Speech Speech-to-Text is not accessible inside the iframe sandbox.");
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      setVoiceOutputPlaying(false);
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      setIsVoiceListening(true);
+      setNotification("🎙️ Listening to Advocate... Say 'Draft/Yes/Proceed' now.");
+
+      recognition.onresult = (event: any) => {
+        const transcriptResult = event.results[0][0].transcript || "";
+        setVoiceInputText(transcriptResult);
+        setIsVoiceListening(false);
+        
+        setNotification(`🎙️ You said: "${transcriptResult}"`);
+        
+        const textLower = transcriptResult.toLowerCase();
+        const isPositive = textLower.includes('yes') || 
+                           textLower.includes('proceed') || 
+                           textLower.includes('continue') || 
+                           textLower.includes('start') || 
+                           textLower.includes('draft') || 
+                           textLower.includes('do') ||
+                           textLower.includes('ok') ||
+                           textLower.includes('go ahead') ||
+                           textLower.includes('affirmative') ||
+                           textLower.includes('sure');
+                           
+        if (isPositive && recordToDraft) {
+          handleAutoDraftTrigger(recordToDraft);
+        } else {
+          speakText("Understood. Let me know if you would like me to draft this petition when you are ready.");
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsVoiceListening(false);
+        setNotification("🎙️ Voice capture finished. Click the Auto-Draft button or speak again.");
+      };
+
+      recognition.onend = () => {
+        setIsVoiceListening(false);
+      };
+
+      recognition.start();
+
+    } catch (e) {
+      setIsVoiceListening(false);
+      setNotification("⚠️ Could not initialize voice recognition.");
+    }
+  };
+
+  const handleAutoDraftTrigger = async (record: VoiceRecord) => {
+    const strategy = getCaseStrategy(record);
+    setSelectedRecord(null);
+    stopSpeaking();
+    
+    // Ingest computed facts
+    setDraftFacts(strategy.draftFacts);
+    setNotification(`🚀 Win Strategy applied! Auto-Drafting petition for ${record.clientName}...`);
+    
+    // Switch to drafting screen
+    setView('drafting');
+    setActivePanel(1); // Go to draft pad
+    
+    // Fire the automatic drafting generator
+    setTimeout(() => {
+      handleAIDrafting(strategy.draftFacts);
+    }, 400);
+  };
+
   // Knowledge Base States
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [expandedArchiveId, setExpandedArchiveId] = useState<string | null>(null);
+
   const [selectedActId, setSelectedActId] = useState<string | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -888,6 +1230,7 @@ const App: React.FC = () => {
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
+  const readingRoomVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -920,6 +1263,12 @@ const App: React.FC = () => {
     cameraEnabledRef.current = false;
     setMicEnabled(false);
     micEnabledRef.current = false;
+    
+    // Clear elements and reset states
+    if (videoRef.current) videoRef.current.srcObject = null;
+    if (readingRoomVideoRef.current) readingRoomVideoRef.current.srcObject = null;
+    setReadingRoomScanPhase('idle');
+    setReadingRoomScanResult(null);
   }, [stream]);
 
   const encode = (bytes: Uint8Array) => {
@@ -952,7 +1301,18 @@ const App: React.FC = () => {
           audio: true,
           video: type === 'camera' || cameraEnabled ? { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } : false
         };
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        let newStream: MediaStream;
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.warn("Retrying with simple video constraints...");
+          const fallbackConstraints = {
+            audio: true,
+            video: type === 'camera' || cameraEnabled ? true : false
+          };
+          newStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        }
         
         const isCam = type === 'camera' || cameraEnabled;
         setStream(newStream);
@@ -993,9 +1353,9 @@ const App: React.FC = () => {
       setAiTranscription("");
 
       const session = await ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+        model: 'gemini-3.1-flash-live-preview',
         config: {
-          responseModalalities: [Modality.AUDIO],
+          responseModalities: [Modality.AUDIO],
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -1094,12 +1454,14 @@ const App: React.FC = () => {
       audioContextRef.current = audioCtx;
 
       frameIntervalRef.current = window.setInterval(() => {
-        if (!cameraEnabledRef.current || !videoRef.current || !canvasRef.current || videoRef.current.videoWidth === 0) return;
+        if (!cameraEnabledRef.current || !canvasRef.current) return;
+        const activeVideoElement = (currentViewRef.current === 'reading-room') ? readingRoomVideoRef.current : videoRef.current;
+        if (!activeVideoElement || activeVideoElement.videoWidth === 0) return;
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
           canvasRef.current.width = 1024;
           canvasRef.current.height = 768;
-          ctx.drawImage(videoRef.current, 0, 0, 1024, 768);
+          ctx.drawImage(activeVideoElement, 0, 0, 1024, 768);
           canvasRef.current.toBlob(blob => {
             if (blob) {
               const reader = new FileReader();
@@ -1125,11 +1487,17 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (cameraEnabled && videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(console.error);
+    if (cameraEnabled && stream) {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(console.error);
+      }
+      if (readingRoomVideoRef.current) {
+        readingRoomVideoRef.current.srcObject = stream;
+        readingRoomVideoRef.current.play().catch(console.error);
+      }
     }
-  }, [cameraEnabled, stream]);
+  }, [cameraEnabled, stream, view]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1500);
@@ -1210,6 +1578,57 @@ const App: React.FC = () => {
     setHistory(prev => prev.filter(item => item.id !== id));
   };
 
+  const handleArchiveItem = (id: number, text: string) => {
+    // Find preceding user question in history
+    const itemIdx = history.findIndex(h => h.id === id);
+    let userQuery = "";
+    if (itemIdx > 0) {
+      for (let i = itemIdx - 1; i >= 0; i--) {
+        if (history[i].role === 'user') {
+          userQuery = history[i].text;
+          break;
+        }
+      }
+    }
+
+    // Construct title
+    let title = "";
+    if (userQuery) {
+      title = userQuery.split("\n")[0].trim();
+      if (title.length > 55) {
+        title = title.substring(0, 52) + "...";
+      }
+    } else {
+      // derive from AI answer title header or similar
+      const firstLine = text.trim().split("\n")[0].replace(/[#*`\-_]/g, '').trim();
+      title = firstLine || "Legal Consultation Advice";
+      if (title.length > 55) {
+        title = title.substring(0, 52) + "...";
+      }
+    }
+
+    const dateStr = new Date().toLocaleDateString('en-GB');
+    const timeStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const timestamp = `${dateStr}, ${timeStr}`;
+
+    const alreadyExists = archives.some(arch => arch.id === `consult-${id}`);
+    if (alreadyExists) {
+      setNotification("🎯 This consultation advice is already stored in your Archive.");
+      return;
+    }
+
+    const newItem: ArchiveItem = {
+      id: `consult-${id}`,
+      title,
+      content: text,
+      timestamp,
+      type: "Legal Consultation Advice"
+    };
+
+    setArchives(prev => [newItem, ...prev]);
+    setNotification("🍱 Counsel advice dispatched to Archive Page successfully!");
+  };
+
   const handleDownloadItem = (text: string, id: number) => {
     const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
     const url = URL.createObjectURL(blob);
@@ -1230,21 +1649,83 @@ const App: React.FC = () => {
     }
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       contents: promptText,
     });
     return response.text || "";
   };
 
-  const handleAIDrafting = async () => {
-    if (!draftFacts.trim() || isDrafting) return;
+  const handleGenerateCaseAnalysis = async (factsToUse: string) => {
+    if (!factsToUse.trim()) return;
+    setIsGeneratingAnalysis(true);
+    try {
+      const prompt = `You are an elite Senior Legal Strategist specializing in litigation blueprints, statutory audits, and court defense tactics.
+Analyze these case facts and construct a detailed report of the laws involved, current challenges/pitfalls, and specific drafting modifications needed to win.
+
+Case facts:
+"${factsToUse}"
+
+You MUST respond strictly with a single JSON object in this exact schema (no markdown wrappers like \`\`\`json, no other dialogue):
+{
+  "lawsInvolved": [
+    {
+      "title": "Law/Statute/Section Title",
+      "provision": "Name of the Act or Code & exact section",
+      "relevance": "Precise legal explanation of how this section covers or governs the current case, and why it is highly applicable."
+    }
+  ],
+  "challenges": [
+    {
+      "title": "Specific Legal Hurdle / Risk Faced",
+      "risk": "Technical legal explanation of how opposing counsel could weaponize this fact/omission to lose the petition or get it dismissed.",
+      "mitigation": "Strategic active action, proof collection, or pleading adjustment to completely neutralize this challenge."
+    }
+  ],
+  "changesNeeded": [
+    {
+      "title": "Vital Pleading Modification Required",
+      "instruction": "Concrete, step-by-step instruction on what to write, assert, or request in the writing pad to secure a victory.",
+      "impact": "The positive legal consequence or advantage this insertion commands in the eyes of the judge."
+    }
+  ]
+}
+
+Ensure you provide 3 robust, highly professional entries for each section. Return absolutely nothing except the direct JSON.`;
+
+      const responseText = await generateResponse(prompt);
+      let cleaned = responseText.trim();
+      if (cleaned.startsWith("```json")) {
+        cleaned = cleaned.substring(7);
+      }
+      if (cleaned.startsWith("```")) {
+        cleaned = cleaned.substring(3);
+      }
+      if (cleaned.endsWith("```")) {
+        cleaned = cleaned.substring(0, cleaned.length - 3);
+      }
+      cleaned = cleaned.trim();
+
+      const parsed = JSON.parse(cleaned);
+      if (parsed.lawsInvolved && parsed.challenges && parsed.changesNeeded) {
+        setDraftAnalysisReport(parsed);
+      }
+    } catch (err) {
+      console.error("Failed to generate strategic analysis report:", err);
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  };
+
+  const handleAIDrafting = async (overrideFacts?: string) => {
+    const factsToUse = overrideFacts !== undefined ? overrideFacts : draftFacts;
+    if (!factsToUse.trim() || isDrafting) return;
     setIsDrafting(true);
     setDraftCitations([]);
     setShowCitationsDropdown(false);
     setCitationSearchError('');
     try {
       const prompt = `Based on the following facts of the case:
-${draftFacts}
+${factsToUse}
 
 ${draftModel ? `And using this model/template as a guide:
 ${draftModel}` : ''}
@@ -1254,6 +1735,9 @@ Maintain a professional legal tone, use appropriate legal terminology, and follo
 
       const draftText = await generateResponse(prompt);
       setDraftPages([draftText]);
+
+      // Trigger litigation strategy analysis report in background!
+      handleGenerateCaseAnalysis(factsToUse);
 
       // Get suggestions
       const suggestionPrompt = `Review the following legal draft and provide 3-5 specific suggestions for improvement or additional points to consider. Provide the suggestions as a bulleted list. Draft to review:
@@ -1266,7 +1750,7 @@ ${draftText}`;
       try {
         const citationPrompt = `You are an expert legal researcher specializing in Indian Supreme Court and High Court judgments.
 Based on the following facts of the case:
-"${draftFacts}"
+"${factsToUse}"
 
 Please analyze the case facts and find 3 highly relevant and favorable, real or highly probable Supreme Court or High Court case citations that support our client's legal position in this exact context.
 If absolutely no relevant precedents or cases can be found for these facts, respond with exactly:
@@ -1610,7 +2094,7 @@ Paragraph: [Detailed rationale of principle of law and application]
       
       const base64Data = converterImage.split(',')[1] || converterImage;
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents: [
           {
             inlineData: {
@@ -1629,6 +2113,91 @@ Paragraph: [Detailed rationale of principle of law and application]
     } catch (err) {
       console.error(err);
       setConverterStatus('idle');
+    }
+  };
+
+  const handleReadingRoomScan = async () => {
+    if (!readingRoomVideoRef.current || !canvasRef.current) return;
+    setReadingRoomScanPhase('analyzing');
+    const video = readingRoomVideoRef.current;
+    const canvas = canvasRef.current;
+    
+    canvas.width = video.videoWidth || 1024;
+    canvas.height = video.videoHeight || 768;
+    const context = canvas.getContext('2d');
+    context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const imageBase64 = canvas.toDataURL('image/jpeg');
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    
+    try {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("Missing API_KEY environment variable.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: 'image/jpeg'
+            }
+          },
+          `You are an elite legal AI assistant. Perform a modern, robust OCR text extraction and high-level legal analysis on this document.
+Please structure your response exactly as follows:
+## LEGAL SUMMARY
+Provide a bulleted list of key elements: Parties involved, core clauses, liabilities, jurisdiction, dates/deadlines, and critical terms.
+
+## STATUTORY CORRELATIONS
+Identify any relevant legislation or statutes from Indian legal acts (e.g., Transfer of Property Act, Railways Act, Civil Procedure, etc.) that relate to this document, with brief sections.
+
+## FULL OCR EXTRACTED TEXT
+Extract and output the complete clean transcription of the document text found in the image. Return only the actual words of the document.`
+        ]
+      });
+
+      const responseText = response.text || "";
+      
+      let summary = "";
+      let statutes = "";
+      let extracted = "";
+      
+      if (responseText.includes("## LEGAL SUMMARY")) {
+        const parts1 = responseText.split("## LEGAL SUMMARY")[1];
+        if (parts1.includes("## STATUTORY CORRELATIONS")) {
+          const parts2 = parts1.split("## STATUTORY CORRELATIONS");
+          summary = parts2[0]?.trim() || "";
+          
+          if (parts2[1].includes("## FULL OCR EXTRACTED TEXT")) {
+            const parts3 = parts2[1].split("## FULL OCR EXTRACTED TEXT");
+            statutes = parts3[0]?.trim() || "";
+            extracted = parts3[1]?.trim() || "";
+          } else {
+            statutes = parts2[1]?.trim() || "";
+          }
+        } else if (parts1.includes("## FULL OCR EXTRACTED TEXT")) {
+          const parts2 = parts1.split("## FULL OCR EXTRACTED TEXT");
+          summary = parts2[0]?.trim() || "";
+          extracted = parts2[1]?.trim() || "";
+        } else {
+          summary = parts1.trim();
+        }
+      } else {
+        summary = responseText;
+      }
+      
+      setReadingRoomScanResult({
+        summary: summary || responseText,
+        extractedText: extracted || responseText,
+        statutoryActs: statutes ? [statutes] : ["No prominent historical statutes mapped directly. Real-time assistant monitoring continues."]
+      });
+      setReadingRoomScanPhase('done');
+    } catch (err) {
+      console.error("Reading Room AI scanner error:", err);
+      setReadingRoomScanPhase('error');
     }
   };
 
@@ -1662,7 +2231,13 @@ Paragraph: [Detailed rationale of principle of law and application]
 
   const startScan = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      } catch (err) {
+        console.warn("Retrying converter stream with clean generic video properties...");
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       converterStreamRef.current = stream;
       if (converterVideoRef.current) {
         converterVideoRef.current.srcObject = stream;
@@ -1708,7 +2283,7 @@ Paragraph: [Detailed rationale of principle of law and application]
       }
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         contents: `Translate the following legal document text into ${targetLanguage}. Maintain the formal legal tone and formatting. Text: ${converterText}`
       });
       setTranslatedText(response.text || "");
@@ -2202,98 +2777,277 @@ Please provide an extremely precise, professional, and well-organized legal resp
                   </div>
 
                   {/* High Fidelity Full-Screen Modal Dialog for full conversation transcripts */}
-                  {selectedRecord && (
-                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-300 font-sans">
-                        <div className="bg-[#090d16] border border-white/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 font-sans">
-                           
-                           {/* Modal Header */}
-                           <div className="p-8 border-b border-white/5 flex items-start justify-between bg-[#0a0f1d] shrink-0 text-left w-full font-sans">
-                              <div className="text-left font-sans">
-                                 <div className="flex items-center gap-2 mb-2 font-sans">
-                                    <span className="text-[9px] font-black text-amber-500 tracking-widest uppercase border border-amber-500/20 px-2 py-0.5 rounded-full bg-amber-500/5 font-mono">{selectedRecord.id}</span>
-                                    <span className="text-[9px] font-black text-indigo-400 tracking-widest uppercase border border-indigo-500/20 px-2 py-0.5 rounded-full bg-indigo-500/5 font-sans">{selectedRecord.caseType}</span>
+                  {selectedRecord && (() => {
+                     const strategy = getCaseStrategy(selectedRecord);
+                     return (
+                        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-300 font-sans">
+                           <div className="bg-[#090d16] border border-white/10 rounded-[2.5rem] w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 font-sans text-left">
+                              
+                              {/* Modal Header */}
+                              <div className="p-6 sm:p-8 border-b border-white/5 flex items-start justify-between bg-[#0a0f1d] shrink-0 text-left w-full font-sans">
+                                 <div className="text-left font-sans">
+                                    <div className="flex flex-wrap items-center gap-2 mb-2 font-sans">
+                                       <span className="text-[9px] font-black text-amber-500 tracking-widest uppercase border border-amber-500/20 px-2 py-0.5 rounded bg-amber-500/5 font-mono">{selectedRecord.id}</span>
+                                       <span className="text-[9px] font-black text-indigo-400 tracking-widest uppercase border border-indigo-500/20 px-2 py-0.5 rounded bg-indigo-500/5 font-sans">{selectedRecord.caseType}</span>
+                                       <span className="text-[9px] font-black text-emerald-400 tracking-widest uppercase border border-emerald-500/20 px-2 py-0.5 rounded bg-emerald-500/05 font-sans animate-pulse">Win Strategy Dispatched</span>
+                                    </div>
+                                    <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase font-sans leading-none">{selectedRecord.clientName}</h3>
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-2 font-sans">Recorded Client Transcript & Case Winning Strategies Panel</p>
                                  </div>
-                                 <h3 className="text-xl font-bold tracking-tight text-white uppercase font-sans">{selectedRecord.clientName}</h3>
-                                 <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1 font-sans">Recorded Voice Session Transcript</p>
-                              </div>
-                              <button 
-                                 onClick={() => setSelectedRecord(null)}
-                                 className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
-                              >
-                                 <X className="w-5 h-5 font-sans" />
-                               </button>
-                           </div>
-
-                           {/* Modal Content */}
-                           <div className="p-8 overflow-y-auto space-y-6 flex-1 custom-scrollbar text-left font-sans">
-                              {/* Briefing Summary */}
-                              <div className="bg-[#111827]/80 border border-white/5 rounded-2xl p-5 text-left h-auto font-sans">
-                                 <h4 className="text-[9px] font-black uppercase text-indigo-400 tracking-wider mb-2 flex items-center gap-1.5 text-left font-sans">
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Briefing Summary
-                                 </h4>
-                                 <p className="text-xs font-semibold text-slate-400 leading-relaxed italic text-left font-sans">
-                                    "{selectedRecord.summary}"
-                                 </p>
+                                 <button 
+                                    onClick={() => { setSelectedRecord(null); stopSpeaking(); }}
+                                    className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer border-0 bg-transparent animate-in duration-100"
+                                 >
+                                    <X className="w-5 h-5 font-sans" />
+                                  </button>
                               </div>
 
-                              {/* Interactive Transcript */}
-                              <div className="space-y-4 text-left font-sans">
-                                 <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-4 text-left w-full font-sans">
-                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 font-sans">
-                                       <MessageSquare className="w-3.5 h-3.5" />
-                                       Full Conversation Transcript
-                                    </h4>
-                                    <span className="text-[9px] text-slate-500 font-bold uppercase font-sans">{selectedRecord.duration} Rec Length</span>
+                              {/* Modal Content - Dual Column */}
+                              <div className="grid grid-cols-1 lg:grid-cols-2 flex-1 overflow-hidden min-h-0 bg-[#070a13]">
+                                 
+                                 {/* Left Panel: Transcripts with interactive list */}
+                                 <div className="p-6 sm:p-8 overflow-y-auto space-y-6 border-b lg:border-b-0 lg:border-r border-white/5 custom-scrollbar text-left font-sans flex flex-col justify-start pb-24 lg:pb-16">
+                                    {/* Briefing Summary */}
+                                    <div className="bg-[#111827]/80 border border-white/5 rounded-2xl p-5 text-left shrink-0 font-sans">
+                                       <h4 className="text-[9px] font-black uppercase text-indigo-400 tracking-wider mb-2 flex items-center gap-1.5 text-left font-sans">
+                                          <FileText className="w-3.5 h-3.5" />
+                                          Briefing Summary
+                                       </h4>
+                                       <p className="text-xs font-semibold text-slate-400 leading-relaxed italic text-left font-sans">
+                                          "{selectedRecord.summary}"
+                                       </p>
+                                    </div>
+
+                                    {/* Click instructions */}
+                                    <div className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 flex items-center gap-2 select-none shrink-0 leading-none">
+                                       <Sparkles className="w-4 h-4 animate-pulse shrink-0 text-amber-400" />
+                                       <span>Click any statement block to read aloud dynamically!</span>
+                                    </div>
+
+                                    {/* Actionable transcript list */}
+                                    <div className="space-y-4 text-left font-sans flex-1">
+                                       <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2 text-left w-full font-sans select-none">
+                                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5 font-sans">
+                                             <MessageSquare className="w-3.5 h-3.5" />
+                                             Conversation Transcript
+                                          </h4>
+                                          <span className="text-[9px] text-slate-500 font-bold uppercase font-sans font-mono">{selectedRecord.duration} Rec Length</span>
+                                       </div>
+
+                                       <div className="space-y-4 text-left w-full font-sans pb-8 select-text">
+                                          {selectedRecord.transcript.map((turn) => {
+                                             const isCurrent = selectedTurnId === turn.id;
+                                             return (
+                                                <div 
+                                                   key={turn.id} 
+                                                   onClick={() => {
+                                                      setSelectedTurnId(turn.id);
+                                                      speakText(turn.text);
+                                                   }}
+                                                   className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'} group/bubble cursor-pointer`}
+                                                >
+                                                   <div className={`p-4 rounded-2xl text-[12.5px] leading-relaxed max-w-[85%] border transition-all text-left ${
+                                                      isCurrent 
+                                                         ? 'bg-indigo-600/20 border-indigo-500 bg-opacity-100 scale-[1.01] shadow-lg shadow-indigo-500/10' 
+                                                         : 'bg-[#181d2c]/40 hover:bg-[#181d2c]/75 border-white/5 text-slate-300 hover:border-white/10'
+                                                   } ${turn.role === 'user' ? 'rounded-br-none' : 'rounded-bl-none'}`}>
+                                                      <div className="text-[9px] font-black uppercase tracking-wider mb-1.5 flex items-center justify-between text-left font-mono">
+                                                         <div className="flex items-center gap-1.5">
+                                                            {turn.role === 'user' ? (
+                                                               <>
+                                                                  <User className="w-3 h-3 text-amber-500" />
+                                                                  <span className="text-amber-500 font-sans">Client statement block</span>
+                                                               </>
+                                                            ) : (
+                                                               <>
+                                                                  <Sparkles className="w-3 h-3 text-indigo-400 animate-pulse" />
+                                                                  <span className="text-indigo-400 font-sans">Nexus AI assistant</span>
+                                                               </>
+                                                            )}
+                                                         </div>
+                                                         <span className="text-slate-500 group-hover/bubble:text-indigo-400 text-[8px] uppercase tracking-widest font-sans underline decoration-dotted ml-2">Click to Speak 🔊</span>
+                                                      </div>
+                                                      <p className="font-semibold text-slate-300 text-left font-sans">{turn.text}</p>
+                                                      
+                                                      {isCurrent && (
+                                                         <div className="mt-2 pt-1.5 border-t border-indigo-500/20 flex items-center gap-1 text-[8px] font-bold text-indigo-300 font-mono uppercase tracking-widest animate-pulse">
+                                                            <Volume2 className="w-3 h-3" /> Voice Narration Active...
+                                                         </div>
+                                                      )}
+                                                   </div>
+                                                </div>
+                                             );
+                                          })}
+                                       </div>
+                                    </div>
                                  </div>
 
-                                 <div className="space-y-4 text-left w-full font-sans">
-                                    {selectedRecord.transcript.map((turn) => (
-                                       <div 
-                                          key={turn.id} 
-                                          className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                       >
-                                          <div className={`p-5 rounded-2xl text-[12.5px] leading-relaxed max-w-[85%] border transition-all text-left ${
-                                             turn.role === 'user' 
-                                                ? 'bg-[#181d2c]/65 border-white/5 text-slate-300 rounded-br-none italic font-sans' 
-                                                : 'bg-indigo-650/10 border-indigo-500/20 text-indigo-100 rounded-bl-none font-sans'
-                                          }`}>
-                                             <div className="text-[9px] font-black uppercase tracking-wider mb-1.5 flex items-center gap-1.5 text-left font-mono">
-                                                {turn.role === 'user' ? (
-                                                   <>
-                                                      <User className="w-3 h-3 text-amber-500" />
-                                                      <span className="text-amber-500 font-sans">Client Statement</span>
-                                                   </>
-                                                ) : (
-                                                   <>
-                                                      <Sparkles className="w-3 h-3 text-indigo-400 animate-pulse" />
-                                                      <span className="text-indigo-400 font-sans">Nexus Legal Counsel</span>
-                                                   </>
-                                                )}
-                                             </div>
-                                             <p className="font-semibold text-slate-300 text-left font-sans">{turn.text}</p>
+                                 {/* Right Panel: AI Win Strategies, TTS Controls & Voice/Button Intake */}
+                                 <div className="p-6 sm:p-8 overflow-y-auto space-y-6 custom-scrollbar bg-[#090e1b] text-left font-sans flex flex-col justify-between pb-24 lg:pb-16">
+                                    <div className="space-y-6">
+                                       
+                                       {/* Core Winning Strategy Banner */}
+                                       <div className="bg-gradient-to-r from-indigo-500/10 to-transparent border-l-4 border-indigo-500 p-4 rounded-r-2xl shrink-0 select-none">
+                                          <span className="text-[8px] font-black uppercase tracking-widest text-[#6366f1] block font-mono">Defense Blueprint</span>
+                                          <h4 className="text-xs font-black uppercase text-white mt-1">Court Winning Strategy</h4>
+                                          <p className="text-[11px] text-indigo-205 mt-1 font-sans italic font-medium leading-relaxed">
+                                             "Preemption, precise statutory reliance, and physical/forensic evidence are paramount."
+                                          </p>
+                                       </div>
+
+                                       {/* Audio Briefing controls */}
+                                       <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 select-none">
+                                          <div className="text-left">
+                                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Voice Strategic briefing</div>
+                                             <div className="text-[8px] font-medium text-slate-500 uppercase tracking-widest mt-0.5 font-mono">Narrate tactical roadmap aloud</div>
+                                          </div>
+                                          
+                                          <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                                             {voiceOutputPlaying ? (
+                                                <button 
+                                                   onClick={stopSpeaking}
+                                                   className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer border-0"
+                                                >
+                                                   <VolumeX size={12} /> Silence Voice
+                                                </button>
+                                             ) : (
+                                                <button 
+                                                   onClick={() => speakText(strategy.audioBriefing + " Here are the core win strategies: " + strategy.strategies.join(" "))}
+                                                   className="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-lg animate-pulse border-0"
+                                                >
+                                                   <Volume2 size={12} /> Audibly Brief Strategy 🔊
+                                                </button>
+                                             )}
                                           </div>
                                        </div>
-                                    ))}
+
+                                       {/* Strategy Details Blocks */}
+                                       <div className="space-y-4 select-text font-sans">
+                                          
+                                          {/* Legal Provisions */}
+                                          <div className="space-y-2">
+                                             <div className="text-[9.5px] font-black uppercase text-indigo-400 tracking-wider font-mono">Governing Legal Framework</div>
+                                             <div className="space-y-1.5">
+                                                {strategy.provisions.map((prov, i) => (
+                                                   <div key={i} className="text-xs bg-[#111827]/60 border border-white/5 p-2.5 rounded-xl text-slate-300 font-semibold flex items-center gap-2">
+                                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                                      <span>{prov}</span>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          </div>
+
+                                          {/* Key Strengths */}
+                                          <div className="space-y-2">
+                                             <div className="text-[9.5px] font-black uppercase text-amber-500 tracking-wider font-mono">Favorable Case Strengths</div>
+                                             <div className="space-y-1.5">
+                                                {strategy.strengths.map((str, i) => (
+                                                   <div key={i} className="text-xs bg-amber-500/5 border border-amber-500/10 p-2.5 rounded-xl text-slate-300 font-semibold flex items-center gap-2">
+                                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                                      <span>{str}</span>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          </div>
+
+                                          {/* Win Strategies & Demands */}
+                                          <div className="space-y-2">
+                                             <div className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider font-mono">Actionable Win Strategies</div>
+                                             <div className="space-y-2">
+                                                {strategy.strategies.map((strat, i) => (
+                                                   <div key={i} className="text-xs bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl text-slate-300 font-semibold leading-relaxed">
+                                                      <div className="text-[8px] font-black text-emerald-400 tracking-widest mb-1 font-mono">TREATISE RULE 0{i+1}:</div>
+                                                      <p>{strat}</p>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          </div>
+
+                                          {/* Evidence REQUIRED */}
+                                          <div className="space-y-2">
+                                             <div className="text-[9.5px] font-black uppercase text-[#818cf8] tracking-wider font-mono">Required Exhibits & Evidence Tracer</div>
+                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {strategy.evidence.map((ev, i) => (
+                                                   <div key={i} className="text-[10px] bg-white/[0.02] border border-white/5 p-2 rounded-xl text-slate-400 font-bold flex items-center gap-2">
+                                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                                                      <span>{ev}</span>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          </div>
+
+                                       </div>
+                                    </div>
+
+                                    {/* Advocate VOICE and ACTION intake panel */}
+                                    <div className="mt-8 pt-6 border-t border-white/5 space-y-4 shrink-0 bg-[#0c1223] p-5 rounded-3xl border border-white/5 shadow-2xl select-none">
+                                       
+                                       <div className="flex justify-between items-start">
+                                          <div>
+                                             <span className="text-[9px] font-black uppercase tracking-widest text-[#6366f1] block font-mono">Advocate Command Hub</span>
+                                             <h5 className="text-xs font-black uppercase text-white mt-1">Shall We Proceed with Auto-Drafting?</h5>
+                                          </div>
+                                          {isVoiceListening ? (
+                                             <span className="text-[9px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-md animate-pulse font-mono">🎤 LISTENING LIVE</span>
+                                          ) : (
+                                             <span className="text-[8px] font-black text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md font-mono">READY</span>
+                                          )}
+                                       </div>
+
+                                       {voiceInputText && (
+                                          <div className="bg-[#111827] border border-white/5 rounded-xl p-3 text-left">
+                                             <span className="text-[8px] font-bold text-slate-500 uppercase block font-mono">Transcribed Command Voice Response</span>
+                                             <span className="text-xs font-semibold text-slate-300 italic">"{voiceInputText}"</span>
+                                          </div>
+                                       )}
+
+                                       {/* Direct Action triggers */}
+                                       <div className="flex flex-col sm:flex-row gap-3">
+                                          {/* Action 1: Voice responder */}
+                                          <button 
+                                             onClick={() => startVoiceCapture(selectedRecord)}
+                                             className={`flex-1 py-3.5 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border bg-transparent ${
+                                                isVoiceListening 
+                                                   ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 animate-pulse' 
+                                                   : 'bg-[#6366f1]/10 border-[#6366f1]/20 text-indigo-300 hover:bg-[#6366f1]/25 hover:border-indigo-400'
+                                             }`}
+                                          >
+                                             <Mic className="w-3.5 h-3.5 text-indigo-400" />
+                                             Speak Response 'Yes' 🎤
+                                          </button>
+
+                                          {/* Action 2: Direct proceed clicker */}
+                                          <button 
+                                             onClick={() => handleAutoDraftTrigger(selectedRecord)}
+                                             className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-black font-extrabold shadow-lg shadow-emerald-500/10 transition-all cursor-pointer active:scale-[0.98] border-0"
+                                          >
+                                             <FileText className="w-3.5 h-3.5 text-black" />
+                                             Yes, Launch Auto-Draft
+                                          </button>
+                                       </div>
+
+                                       <p className="text-[9px] text-[#64748b] text-center font-bold uppercase tracking-widest leading-loose">
+                                          Say "Proceed/Draft/Yes" via Speech Response, or press the launch button to draft in Drafting Suite.
+                                       </p>
+
+                                    </div>
+
                                  </div>
+
                               </div>
-                           </div>
 
-                           {/* Modal Footer actions */}
-                           <div className="p-6 border-t border-white/5 bg-[#0a0f1d] flex gap-4 shrink-0 text-left w-full font-mono">
-                              <button onClick={() => setSelectedRecord(null)} className="flex-1 py-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all cursor-pointer font-sans">
-                                 <X className="w-4 h-4 font-sans" />
-                                 Close & Return
-                              </button>
-                              <button onClick={() => { setSelectedRecord(null); setView('drafting'); }} className="flex-1 py-4 bg-emerald-600 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-black font-extrabold shadow-lg shadow-emerald-600/10 hover:bg-emerald-500 transition-all cursor-pointer font-sans">
-                                 <FileText className="w-4 h-4 font-sans" />
-                                 Draft Petition
-                              </button>
-                           </div>
+                              {/* Modal Footer actions */}
+                              <div className="p-6 border-t border-white/5 bg-[#0a0f1d] flex gap-4 shrink-0 text-left w-full font-mono">
+                                 <button onClick={() => { setSelectedRecord(null); stopSpeaking(); }} className="flex-1 py-4 bg-white/5 border border-white/10 hover:bg-white/10 border-0 bg-transparent rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all cursor-pointer font-sans">
+                                    <X className="w-4 h-4 font-sans" />
+                                    Close Strategy Portal
+                                 </button>
+                              </div>
 
+                           </div>
                         </div>
-                     </div>
-                  )}
+                     );
+                  })()}
                </div>
             )}
 
@@ -2662,20 +3416,280 @@ Please provide an extremely precise, professional, and well-organized legal resp
 
 
             {view === 'reading-room' && (
-               <div className="w-full h-full flex flex-col items-center justify-center p-4 overflow-y-auto custom-scrollbar">
-                  <div className="w-full max-w-6xl h-full bg-[#0a0f1d] rounded-[3rem] border border-white/5 relative shadow-2xl overflow-hidden flex flex-col">
-                    {cameraEnabled ? (
-                       <div className="relative flex-1 bg-black">
-                          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain grayscale-[0.2] contrast-125" />
-                          <button onClick={() => stopHardware()} className="absolute top-8 right-8 px-6 py-3 bg-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Close Scanner</button>
-                       </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
-                        <button onClick={() => toggleHardware('camera')} className="px-12 py-5 bg-indigo-600 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-indigo-500 transition-all shadow-2xl transform hover:scale-105">Initialize Scanner</button>
-                      </div>
-                    )}
+              <div className="w-full h-full p-3 sm:p-6 flex flex-col overflow-y-auto md:overflow-hidden bg-[#070b14] relative text-slate-300 custom-scrollbar">
+                
+                {/* Visual Header */}
+                <div className="flex justify-between items-center sm:items-end shrink-0 mb-4 sm:mb-6 px-1.5">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[#6366f1] mb-1">Optical Scan Room</div>
+                    <h3 className="text-3xl sm:text-4xl font-black italic">Reading<span className="text-slate-500 not-italic">Room</span></h3>
                   </div>
-               </div>
+                  {cameraEnabled && (
+                    <button 
+                      onClick={() => stopHardware()} 
+                      className="px-4 py-2 bg-rose-600/20 border border-rose-600/30 text-rose-400 font-bold uppercase tracking-wider text-[10px] hover:bg-rose-600/30 rounded-xl transition-all cursor-pointer"
+                    >
+                      Disconnect Feed
+                    </button>
+                  )}
+                </div>
+
+                {cameraEnabled ? (
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 min-h-0 overflow-hidden pb-16 md:pb-0">
+                    
+                    {/* Left Column: Viewfinder (7 Cols) */}
+                    <div className="md:col-span-6 xl:col-span-7 bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] relative flex flex-col overflow-hidden group shadow-2xl min-h-[350px] md:min-h-0">
+                      
+                      {/* Video Viewfinder */}
+                      <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
+                        <video 
+                          ref={readingRoomVideoRef} 
+                          autoPlay 
+                          playsInline 
+                          muted 
+                          className="w-full h-full object-contain grayscale-[0.2] contrast-125 rounded-2xl" 
+                        />
+                        
+                        {/* Interactive Laser Scanning Effect */}
+                        {readingRoomScanPhase === 'analyzing' && (
+                          <div className="absolute inset-0 bg-transparent overflow-hidden pointer-events-none z-20">
+                            <div className="w-full h-1 bg-indigo-500 shadow-[0_0_15px_#6366f1] rounded-full absolute animate-[ping_1.5s_infinite]" style={{ top: '50%' }} />
+                            <div className="w-full h-full bg-gradient-to-b from-indigo-500/0 via-indigo-500/10 to-indigo-500/0 absolute animate-[pulse_1s_infinite]" />
+                          </div>
+                        )}
+
+                        {/* Status overlays */}
+                        <div className="absolute top-4 left-4 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 flex items-center gap-1.5 select-none z-30">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                          <span className="text-[8px] font-black uppercase tracking-wider text-slate-300">Live Lens Active</span>
+                        </div>
+                      </div>
+
+                      {/* Control buttons below viewfinder */}
+                      <div className="p-4 bg-slate-900/40 border-t border-white/5 flex flex-col sm:flex-row gap-3 items-center justify-between z-10 font-sans">
+                        <div className="text-[10px] text-slate-400 max-w-[280px] text-center sm:text-left">
+                          📢 Position legal pages, petitions, or judgements flatly within the viewport for prompt recognition.
+                        </div>
+                        <button
+                          onClick={handleReadingRoomScan}
+                          disabled={readingRoomScanPhase === 'analyzing'}
+                          className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all transform hover:scale-102 flex items-center justify-center gap-2 text-xs shadow-lg cursor-pointer"
+                        >
+                          {readingRoomScanPhase === 'analyzing' ? (
+                            <>
+                              <RotateCcw size={14} className="animate-spin" />
+                              AI Extracting & Summarizing...
+                            </>
+                          ) : (
+                            <>
+                              <Camera size={14} />
+                              Snap & Inspect Document
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                    </div>
+
+                    {/* Right Column: AI Insights & Extraction Side panel (5 Cols) */}
+                    <div className="md:col-span-6 xl:col-span-5 bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-6 flex flex-col overflow-hidden min-h-[400px] md:min-h-0 relative shadow-inner font-sans">
+                      
+                      {readingRoomScanPhase === 'idle' && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-4 animate-bounce">
+                            <Sparkles size={24} />
+                          </div>
+                          <h4 className="text-lg font-black uppercase tracking-tight text-white mb-2">Live AI Inspection</h4>
+                          <p className="text-xs text-slate-400 leading-relaxed max-w-xs mb-6">
+                            Press "Snap & Inspect Document" to extract full text and receive legal breakdowns directly via Gemini.
+                          </p>
+                          
+                          <div className="w-full space-y-2 border border-dashed border-white/10 rounded-2xl p-4 text-left bg-white/[0.01]">
+                            <div className="text-[10px] uppercase font-black tracking-widest text-[#6366f1] mb-2">Capabilities</div>
+                            <div className="flex items-start gap-2.5 text-[11px] text-slate-300">
+                              <span className="text-indigo-400 mt-0.5">•</span>
+                              <p><strong>Digital OCR</strong> - Extracts complex paragraphs with absolute typographic precision.</p>
+                            </div>
+                            <div className="flex items-start gap-2.5 text-[11px] text-slate-300">
+                              <span className="text-indigo-400 mt-0.5">•</span>
+                              <p><strong>Statute Linker</strong> - Auto-determines applicable statutory rules & codes.</p>
+                            </div>
+                            <div className="flex items-start gap-2.5 text-[11px] text-slate-300">
+                              <span className="text-indigo-400 mt-0.5">•</span>
+                              <p><strong>Vocal Stream</strong> - Turn on your vocal channel while scanning to converse directly with Gemini about what it sees.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {readingRoomScanPhase === 'analyzing' && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-4 select-none">
+                          <div className="relative mb-6">
+                            <div className="w-12 h-12 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                              <Cpu size={18} className="text-indigo-400" />
+                            </div>
+                          </div>
+                          
+                          <h4 className="text-sm font-black uppercase tracking-wider text-slate-200 mb-2">Core Engine Actively Reading</h4>
+                          <p className="text-xs text-slate-400 animate-pulse">Running advanced OCR and legal reasoning...</p>
+                          
+                          <div className="mt-8 space-y-1 text-left w-full max-w-xs mx-auto">
+                            <div className="text-[9px] text-slate-500 flex justify-between">
+                              <span>Rasterizing camera capture...</span>
+                              <span className="text-emerald-400 font-bold">Done</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 flex justify-between">
+                              <span>Translating typography contours...</span>
+                              <span className="text-indigo-400 font-bold animate-pulse">In Progress</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 flex justify-between">
+                              <span>Synthesizing legal statute codes...</span>
+                              <span className="text-slate-600">Pending</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {readingRoomScanPhase === 'error' && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+                          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400 mb-4">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h4 className="text-md font-bold text-rose-400 mb-2">Inspection Fault</h4>
+                          <p className="text-xs text-slate-400 leading-relaxed max-w-xs mb-4">
+                            Unable to analyze the snapshot. This can happen if the file is blurred, unreadable, or communication key parameters are invalid.
+                          </p>
+                          <button 
+                            onClick={handleReadingRoomScan} 
+                            className="px-5 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 rounded-xl text-xs font-bold leading-none cursor-pointer border border-rose-500/30 transition-all"
+                          >
+                            Retry Inspection
+                          </button>
+                        </div>
+                      )}
+
+                      {readingRoomScanPhase === 'done' && readingRoomScanResult && (
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                          
+                          {/* Tab selectors */}
+                          <div className="flex bg-[#070b14] border border-white/10 p-1 rounded-xl justify-around items-center shrink-0 z-30 select-none mb-4">
+                            <button 
+                              onClick={() => setReadingRoomActiveTab('summary')}
+                              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                                readingRoomActiveTab === 'summary' 
+                                  ? 'bg-[#1e293b] text-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.2)]' 
+                                  : 'text-slate-400 hover:text-white bg-transparent'
+                              }`}
+                            >
+                              Report
+                            </button>
+                            <button 
+                              onClick={() => setReadingRoomActiveTab('ocr')}
+                              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                                readingRoomActiveTab === 'ocr' 
+                                  ? 'bg-[#1e293b] text-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.2)]' 
+                                  : 'text-slate-400 hover:text-white bg-transparent'
+                              }`}
+                            >
+                              OCR Extract
+                            </button>
+                            <button 
+                              onClick={() => setReadingRoomActiveTab('statutory')}
+                              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                                readingRoomActiveTab === 'statutory' 
+                                  ? 'bg-[#1e293b] text-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.2)]' 
+                                  : 'text-slate-400 hover:text-white bg-transparent'
+                              }`}
+                            >
+                              Statutory
+                            </button>
+                          </div>
+
+                          {/* Tab Content Panels */}
+                          <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#070b14] border border-white/5 rounded-2xl p-4 mb-4 text-left">
+                            
+                            {readingRoomActiveTab === 'summary' && (
+                              <div className="space-y-4 animate-in fade-in duration-200">
+                                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Legal Assessment Summary</div>
+                                <div className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap">
+                                  <ReactMarkdown>{readingRoomScanResult.summary}</ReactMarkdown>
+                                </div>
+                              </div>
+                            )}
+
+                            {readingRoomActiveTab === 'ocr' && (
+                              <div className="space-y-4 animate-in fade-in duration-200 select-text">
+                                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Clean Document Copy</div>
+                                <p className="text-xs leading-relaxed text-slate-200 font-mono whitespace-pre-wrap">
+                                  {readingRoomScanResult.extractedText}
+                                </p>
+                              </div>
+                            )}
+
+                            {readingRoomActiveTab === 'statutory' && (
+                              <div className="space-y-4 animate-in fade-in duration-200">
+                                <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Act & Jurisprudence Linkage</div>
+                                <div className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap">
+                                  {readingRoomScanResult.statutoryActs.map((act, i) => (
+                                    <div key={i} className="mb-2">
+                                      <ReactMarkdown>{act}</ReactMarkdown>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+
+                          {/* Quick Action buttons */}
+                          <div className="grid grid-cols-2 gap-3 mt-auto shrink-0 font-sans">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(readingRoomScanResult.extractedText);
+                                setNotification("📋 Extracted text copied to clipboard.");
+                              }}
+                              className="py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Copy size={12} /> Copy OCR
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDraftFacts(prev => prev + (prev.trim() ? "\n\n" : "") + "--- Extracted from Reading Room Scan ---\n" + readingRoomScanResult.extractedText);
+                                setView('drafting');
+                                setEnlargedElement('facts');
+                                setNotification("📂 Extracted text injected into Drafting Facts successfully.");
+                              }}
+                              className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md animate-pulse"
+                            >
+                              <Plus size={12} /> Feed Drafting
+                            </button>
+                          </div>
+
+                        </div>
+                      )}
+
+                    </div>
+
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] shadow-box">
+                    <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-6 pulse">
+                      <Camera size={32} />
+                    </div>
+                    <h4 className="text-xl font-black uppercase tracking-tight text-white mb-2">Connect Scanner Mode</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed max-w-md mb-8">
+                      Turn on the scan room camera feed to enable immediate statutory correlation, clean high-fidelity OCR, and live visual guidance.
+                    </p>
+                    <button 
+                      onClick={() => toggleHardware('camera')} 
+                      className="px-10 py-5 bg-indigo-600 rounded-2xl font-black uppercase text-xs tracking-widest text-white hover:bg-indigo-500 transition-all shadow-2xl transform hover:scale-105"
+                    >
+                      Initialize Scanner Room
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {view === 'clients' && (
@@ -2817,6 +3831,14 @@ Please provide an extremely precise, professional, and well-organized legal resp
                                   >
                                     <Download className="w-3.5 h-3.5" />
                                     <span>Download</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleArchiveItem(item.id, item.text)}
+                                    className="flex items-center gap-1.5 hover:text-amber-400 font-bold uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                                  >
+                                    <Archive className="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Archive</span>
                                   </button>
 
                                   <button
@@ -2978,11 +4000,188 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'archive' && (
-              <div className="w-full h-full flex items-center justify-center p-8 overflow-y-auto custom-scrollbar">
-                 <div className="w-full max-w-4xl min-h-[400px] h-full bg-[#0a0f1d] rounded-[3rem] border border-white/5 p-16 flex flex-col items-center justify-center opacity-40 shadow-2xl">
-                    <h2 className="text-3xl font-black uppercase tracking-[0.3em] mb-6 italic">Nexus Archive</h2>
-                    <p className="text-[12px] font-bold uppercase tracking-[0.5em] text-indigo-400">Advanced Legal Logic Engine v3.1</p>
-                 </div>
+              <div className="w-full h-full p-4 sm:p-8 flex flex-col overflow-y-auto bg-[#070b14] relative text-slate-300 custom-scrollbar select-none">
+                
+                {/* Visual Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4 px-1">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[#6366f1] mb-1">Cabinet Archives</div>
+                    <h3 className="text-3xl sm:text-4xl font-black italic">Research<span className="text-slate-500 not-italic">Vault</span></h3>
+                    <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                      Persisted records of legal consultation advices, judgements, and client intelligence memos.
+                    </p>
+                  </div>
+                  <div className="text-[10px] py-2 px-3 bg-white/5 border border-white/10 rounded-xl font-bold uppercase tracking-wider text-slate-400 font-mono">
+                    Stored Records: <span className="text-indigo-400 font-black">{archives.length}</span>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-6 w-full max-w-xl self-start px-1">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search archived advisor advices, topics, or records..."
+                      value={archiveSearch}
+                      onChange={(e) => setArchiveSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-[#0a0f1d] border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-all shadow-lg"
+                    />
+                    <Search className="absolute left-3.5 top-3.5 text-slate-500" size={14} />
+                    {archiveSearch && (
+                      <button
+                        onClick={() => setArchiveSearch('')}
+                        className="absolute right-3.5 top-3.5 text-slate-500 hover:text-white text-[11px] font-bold border-0 bg-transparent cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Archives Content Segment */}
+                {archives.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-12 border border-dashed border-white/10 rounded-[2.5rem] bg-[#0a0f1d]/30 max-w-4xl w-full self-center my-8">
+                    <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-6">
+                      <Archive size={32} />
+                    </div>
+                    <h4 className="text-lg font-bold text-white mb-2">No Archived Research Found</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed max-w-md">
+                      Go to the <span className="text-indigo-400 font-bold hover:underline cursor-pointer" onClick={() => setView('consult')}>AI Consultation</span> page, formulate your questions, and press the **"Archive"** button next to each response to keep them preserved here.
+                    </p>
+                  </div>
+                ) : (() => {
+                  const filteredArchives = archives.filter(item => 
+                    item.title.toLowerCase().includes(archiveSearch.toLowerCase()) || 
+                    item.content.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+                    item.type.toLowerCase().includes(archiveSearch.toLowerCase())
+                  );
+                  
+                  if (filteredArchives.length === 0) {
+                    return (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-12 max-w-xl w-full self-center">
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">No matching items found for "{archiveSearch}"</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 gap-6 max-w-5xl w-full pb-16">
+                      {filteredArchives.map((art) => {
+                        const isExpanded = expandedArchiveId === art.id;
+                        return (
+                          <div 
+                            key={art.id} 
+                            className="bg-[#0a0f1d] border border-white/5 rounded-3xl p-6 hover:border-white/10 transition-all flex flex-col shadow-xl select-text"
+                          >
+                            {/* Card Header */}
+                            <div className="flex justify-between items-start gap-4 mb-4 select-none">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                  <BookOpen size={16} />
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-[#6366f1] bg-indigo-600/10 border border-indigo-500/20 px-2 py-0.5 rounded-md inline-block">
+                                    {art.type}
+                                  </span>
+                                  <h4 className="text-sm font-bold text-white mt-1.5 leading-snug">{art.title}</h4>
+                                </div>
+                              </div>
+                              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono shrink-0 whitespace-nowrap">
+                                {art.timestamp}
+                              </span>
+                            </div>
+
+                            {/* Card Body with Markdown support */}
+                            <div className="text-xs leading-relaxed text-slate-300 font-sans border-t border-b border-white/[0.03] py-4 my-2 select-text text-left">
+                              {isExpanded ? (
+                                <div className="prose prose-invert max-w-none text-slate-200">
+                                  <ReactMarkdown>{art.content}</ReactMarkdown>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="line-clamp-3">
+                                    {art.content.replace(/[#*`\-_]/g, '').trim()}
+                                  </p>
+                                  <button 
+                                    onClick={() => setExpandedArchiveId(art.id)}
+                                    className="mt-3 text-[#6366f1] hover:text-indigo-400 font-black uppercase tracking-widest text-[9px] cursor-pointer border-0 bg-transparent p-0 flex items-center gap-1"
+                                  >
+                                    Read full archived text <ChevronRight size={10} />
+                                  </button>
+                                </div>
+                              )}
+
+                              {isExpanded && (
+                                <button 
+                                  onClick={() => setExpandedArchiveId(null)}
+                                  className="mt-4 text-slate-500 hover:text-white font-black uppercase tracking-widest text-[9px] cursor-pointer border-0 bg-transparent p-0"
+                                >
+                                  Collapse record view
+                              </button>
+                              )}
+                            </div>
+
+                            {/* Card Action Controls */}
+                            <div className="flex flex-wrap items-center gap-4 mt-2 select-none font-sans text-[10px]">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(art.content);
+                                  setNotification("📋 Copied archived document to clipboard.");
+                                }}
+                                className="flex items-center gap-1.5 text-slate-400 hover:text-[#6366f1] font-bold uppercase tracking-wider transition-colors cursor-pointer border-0 bg-transparent p-0"
+                              >
+                                <Copy size={13} /> Copy Text
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  const blob = new Blob([art.content], {type: 'text/plain;charset=utf-8'});
+                                  const url = URL.createObjectURL(blob);
+                                  const element = document.createElement("a");
+                                  element.href = url;
+                                  element.download = `nexus_archive_${art.id}.txt`;
+                                  document.body.appendChild(element);
+                                  element.click();
+                                  document.body.removeChild(element);
+                                  URL.revokeObjectURL(url);
+                                  setNotification("📥 Archived record downloaded safely.");
+                                }}
+                                className="flex items-center gap-1.5 text-slate-400 hover:text-[#6366f1] font-bold uppercase tracking-wider transition-colors cursor-pointer border-0 bg-transparent p-0"
+                              >
+                                <Download size={13} /> Download
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setDraftFacts(prev => prev + (prev.trim() ? "\n\n" : "") + "--- From Archived Consultation ---\n" + art.content);
+                                  setView('drafting');
+                                  setEnlargedElement('facts');
+                                  setNotification("📂 Injected archived document into Drafting Facts.");
+                                }}
+                                className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 font-bold uppercase tracking-wider transition-all cursor-pointer border-0 bg-transparent p-0 animate-pulse"
+                              >
+                                <Plus size={13} /> Feed Drafting
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setArchives(prev => prev.filter(item => item.id !== art.id));
+                                  if (expandedArchiveId === art.id) setExpandedArchiveId(null);
+                                  setNotification("🗑️ Document deleted from Archive Page successfully.");
+                                }}
+                                className="flex items-center gap-1.5 text-slate-500 hover:text-rose-400 font-bold uppercase tracking-wider transition-colors cursor-pointer border-0 bg-transparent p-0 ml-auto"
+                              >
+                                <Trash2 size={13} /> Scrap Record
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
               </div>
             )}
 
@@ -2995,7 +4194,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
             )}
 
             {view === 'drafting' && (
-              <div className="h-full w-full flex flex-col overflow-hidden bg-[#070b14] relative text-slate-300">
+              <div className="h-full w-full flex flex-col overflow-y-auto bg-[#070b14] relative text-slate-300 custom-scrollbar scroll-smooth">
                 {/* Mobile Slider Header-Tabs Navigation */}
                 <div className="flex md:hidden bg-[#090e18] border-b border-white/10 p-2.5 justify-around items-center shrink-0 z-30 select-none">
                   <button 
@@ -3036,7 +4235,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
                 <div 
                   ref={draftingContainerRef}
                   onScroll={handleDraftingScroll}
-                  className="flex-1 flex flex-row overflow-x-auto md:overflow-hidden snap-x snap-mandatory scroll-smooth custom-scrollbar"
+                  className="h-[calc(100vh-12rem)] md:h-[calc(100vh-12rem)] min-h-[580px] shrink-0 flex flex-row overflow-x-auto md:overflow-hidden snap-x snap-mandatory scroll-smooth custom-scrollbar"
                 >
                   {/* Left Panel: Inputs */}
                   <div className="w-[calc(100vw-72px)] md:w-80 flex-shrink-0 snap-center flex flex-col border-r border-white/5 bg-[#070b14]">
@@ -3325,166 +4524,169 @@ Please provide an extremely precise, professional, and well-organized legal resp
                   </div>
                 </div> {/* End sliding panels wrapper */}
 
-                {/* Overlays / Modal Windows */}
-                {/* 1. ShowCustomPromptPage Overlay */}
-                {showCustomPromptPage && (
-                  <div className="fixed inset-0 bg-[#02050a]/90 backdrop-blur-md z-[600] flex items-center justify-center p-4">
-                    <div className="bg-[#090e18] border border-white/10 rounded-[2rem] w-full max-w-2xl h-[85vh] flex flex-col overflow-hidden shadow-2xl">
-                      <div className="p-8 border-b border-white/5 flex justify-between items-center shrink-0">
-                        <div>
-                          <h3 className="text-lg font-black uppercase tracking-wider text-white font-sans">Custom Drafting Prompts</h3>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 font-sans">Configure advanced structural & stylistic layout logic rules</p>
+                {/* Strategic Visual Page Divider & Scroll Anchor Trigger */}
+                <div 
+                  onClick={() => document.getElementById('case-strategy-report-section')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="border-t border-indigo-500/10 py-5 bg-[#040811] flex flex-col items-center justify-center gap-1 cursor-pointer shrink-0 select-none hover:bg-[#070b19] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-indigo-400 font-sans text-[10px] font-black uppercase tracking-widest leading-none">
+                    <ChevronRight size={14} className="rotate-90 text-indigo-400 animate-bounce" />
+                    SCROLL DOWN FOR CASE LAWS, LEGAL CHALLENGES & WIN STRATEGY REPORT
+                    <ChevronRight size={14} className="rotate-90 text-indigo-400 animate-bounce" />
+                  </div>
+                  <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest font-sans">Click to scroll to Analysis & Action Report</p>
+                </div>
+
+                {/* DYNAMIC CASE LAWS, CHALLENGES & WIN STRATEGY SUITE */}
+                <div id="case-strategy-report-section" className="bg-[#050811] border-t border-white/5 p-6 sm:p-10 space-y-10 text-left font-sans shrink-0 pb-36">
+                  {/* Strategic Header */}
+                  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-[#080d1a]/80 border border-white/5 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    {/* Glowing Accent Spot */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] rounded-full pointer-events-none" />
+                    
+                    <div>
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 font-sans">LITIGATION INTELLIGENCE ENGINE v3.1</span>
+                      </div>
+                      <h3 className="text-xl font-black uppercase text-white tracking-wide font-sans">
+                        Case Strategy, Statutes & Win-Tactic Analysis Report
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-2xl font-sans">
+                        Live diagnostic review of active facts and laws. Displays critical regulatory/legal provisions, hostile defense risks, and precise changes required to win while drafting.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => handleGenerateCaseAnalysis(draftFacts)}
+                        disabled={isGeneratingAnalysis || !draftFacts.trim()}
+                        className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-xl font-black text-xs text-white uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)] hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0"
+                      >
+                        {isGeneratingAnalysis ? (
+                          <RotateCcw size={14} className="animate-spin" />
+                        ) : (
+                          <Cpu size={14} />
+                        )}
+                        {isGeneratingAnalysis ? "ANALYZING ACTION..." : "RE-RUN DOCKET DIAGNOSIS"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Report Content - Loading or Grid */}
+                  {isGeneratingAnalysis ? (
+                    <div className="py-20 flex flex-col items-center justify-center gap-3 bg-white/[0.01] border border-white/5 rounded-3xl">
+                      <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="text-xs font-black tracking-widest text-[#818cf8] animate-pulse font-sans">
+                        LAUNCHING NEURAL LAWSUIT AUDIT & STRATEGY SYNOPSIS...
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium font-sans">Extracting acts, modeling defense hazards, and drafting pleading adjustments.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                      {/* STATUTES INVOLVED PANEL */}
+                      <div className="bg-[#080c16] border border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-lg relative min-h-[300px]">
+                        <div className="absolute top-0 left-6 -translate-y-1/2 bg-[#0d152a] border border-white/10 px-3 py-1.5 rounded-full text-[9px] font-black text-indigo-400 uppercase tracking-widest font-sans flex items-center gap-1.5 shadow-md">
+                          <BookOpen size={10} className="text-indigo-400" />
+                          1. Statutes & Systems Involved
                         </div>
-                        <button onClick={() => setShowCustomPromptPage(false)} className="p-2 text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-all cursor-pointer">
-                          <X size={18} />
-                        </button>
+                        
+                        <div className="space-y-4 mt-2 flex-1">
+                          {draftAnalysisReport.lawsInvolved.map((law, idx) => (
+                            <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:border-indigo-500/20 transition-all duration-300">
+                              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1.5 mb-2">
+                                <span className="text-xs font-black text-slate-200 uppercase font-sans tracking-wide leading-tight">{law.title}</span>
+                                <span className="self-start px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold text-[8px] font-sans uppercase tracking-wider">{law.provision}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-relaxed font-sans">{law.relevance}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
-                      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                        {/* Preset Directives Left Panel */}
-                        <div className="w-full md:w-64 border-r border-white/5 flex flex-col h-1/2 md:h-full bg-black/10 overflow-hidden">
-                          <div className="p-4 border-b border-white/5 shrink-0">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400 block font-sans">Directive Blueprints</span>
-                          </div>
-                          <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                            {/* Preloaded Presets */}
-                            {systemDirectives.map((preset, idx) => {
-                              const isActive = customPromptText === preset.text;
-                              return (
-                                <div
-                                  key={`static-${idx}`}
-                                  onClick={() => setCustomPromptText(preset.text)}
-                                  className={`w-full rounded-xl transition-all p-3 text-xs border cursor-pointer ${
-                                    isActive 
-                                      ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.2)]' 
-                                      : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/30'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-start mb-1 gap-2">
-                                    <span className={`font-bold flex-1 text-left font-sans ${isActive ? 'text-indigo-300' : 'text-slate-400'}`}>
-                                      {preset.label}
-                                    </span>
-                                    {isActive && (
-                                      <span className="text-[8px] bg-indigo-500/20 border border-indigo-500/30 px-1 py-0.5 rounded text-indigo-400 font-black font-sans shrink-0">
-                                        ACTIVE
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className={`text-[10px] line-clamp-2 text-left font-sans ${isActive ? 'text-slate-255' : 'text-slate-500'}`}>{preset.text}</p>
-                                </div>
-                              );
-                            })}
-
-                            {/* User Custom Created presets */}
-                            {customDirectives.map((preset, idx) => {
-                              const isActive = customPromptText === preset.prompt;
-                              return (
-                                <div
-                                  key={`custom-${idx}`}
-                                  className={`w-full rounded-xl transition-all p-3 text-xs border ${
-                                    isActive 
-                                      ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.2)]' 
-                                      : 'bg-indigo-950/20 border-white/5 hover:bg-indigo-950/30 hover:border-indigo-500/30'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-start mb-1 gap-2">
-                                    <button
-                                      onClick={() => setCustomPromptText(preset.prompt)}
-                                      className={`text-left font-bold flex-1 font-sans ${isActive ? 'text-indigo-300 font-extrabold' : 'text-emerald-400 hover:text-emerald-300'}`}
-                                    >
-                                      {preset.name}
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        const updated = customDirectives.filter((_, i) => i !== idx);
-                                        saveCustomDirectives(updated);
-                                      }}
-                                      className="text-slate-500 hover:text-red-400 p-0.5 transition-colors cursor-pointer"
-                                      title="Delete custom preset"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                  <button
-                                    onClick={() => setCustomPromptText(preset.prompt)}
-                                    className={`w-full text-left font-sans line-clamp-2 text-[10px] ${isActive ? 'text-slate-200' : 'text-slate-400'}`}
-                                  >
-                                    {preset.prompt}
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
+                      {/* LEGAL CHALLENGES PANEL */}
+                      <div className="bg-[#080c16] border border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-lg relative min-h-[300px]">
+                        <div className="absolute top-0 left-6 -translate-y-1/2 bg-[#2d1810] border border-orange-500/20 px-3 py-1.5 rounded-full text-[9px] font-black text-orange-400 uppercase tracking-widest font-sans flex items-center gap-1.5 shadow-md">
+                          <AlertTriangle size={10} className="text-orange-400" />
+                          2. Hostile Legal Challenges
                         </div>
 
-                        {/* Interactive Editor Right Panel */}
-                        <div className="flex-1 p-8 flex flex-col h-1/2 md:h-full overflow-y-auto custom-scrollbar">
-                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 font-sans">Configure Custom Pleading Logic Instruction</label>
-                          <textarea 
-                            value={customPromptText}
-                            onChange={e => setCustomPromptText(e.target.value)}
-                            placeholder="e.g., Rewrite the case draft to strongly highlight the lack of initial dynamic intention in the sequential occurrence of events..."
-                            className="w-full flex-1 min-h-[140px] bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none transition-colors resize-none font-sans"
-                          />
-
-                          {/* Quick Custom Directive Creator */}
-                          <div className="mt-6 border-t border-white/5 pt-6">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 font-sans">Save Prompt Draft as a Preset</span>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                              <input 
-                                value={newDirectiveName} 
-                                onChange={e => setNewDirectiveName(e.target.value)} 
-                                placeholder="Preset ID Name (e.g. Criminal Bail)" 
-                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans" 
-                              />
-                              <button 
-                                onClick={() => {
-                                  if (!newDirectiveName.trim() || !customPromptText.trim()) return;
-                                  const updated = [...customDirectives, { name: newDirectiveName.trim(), prompt: customPromptText.trim() }];
-                                  saveCustomDirectives(updated);
-                                  setNewDirectiveName('');
-                                }}
-                                disabled={!newDirectiveName.trim() || !customPromptText.trim()}
-                                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer font-sans"
-                              >
-                                SAVE PRESET
-                              </button>
+                        <div className="space-y-4 mt-2 flex-1">
+                          {draftAnalysisReport.challenges.map((challenge, idx) => (
+                            <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:border-orange-500/20 transition-all duration-300">
+                              <h4 className="text-xs font-black text-orange-400 font-sans tracking-wide mb-1 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                {challenge.title}
+                              </h4>
+                              <div className="grid grid-cols-1 gap-2.5 mt-2.5">
+                                <div className="bg-orange-500/[0.03] border-l border-orange-500/20 pl-2.5 py-1">
+                                  <span className="text-[9px] font-black uppercase text-orange-400 tracking-wider block font-sans">Technical Risk</span>
+                                  <p className="text-[10px] text-slate-400 leading-normal font-sans mt-0.5">{challenge.risk}</p>
+                                </div>
+                                <div className="bg-emerald-500/[0.03] border-l border-emerald-500/20 pl-2.5 py-1">
+                                  <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider block font-sans">Active Mitigation</span>
+                                  <p className="text-[10px] text-slate-400 leading-normal font-sans mt-0.5">{challenge.mitigation}</p>
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          ))}
+                        </div>
+                      </div>
 
-                          <div className="mt-8 border-t border-white/5 pt-6 flex flex-col md:flex-row gap-3">
-                            <button
-                              onClick={() => {
-                                handleCustomPromptDrafting('draft');
-                                setShowCustomPromptPage(false);
-                              }}
-                              disabled={isCustomPromptProcessing || !customPromptText.trim()}
-                              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 font-sans"
-                            >
-                              <Zap size={14} />
-                              DRAFT CASE (WRITING PAD)
-                            </button>
-                            <button
-                              onClick={() => {
-                                handleCustomPromptDrafting('suggestions');
-                                setShowCustomPromptPage(false);
-                              }}
-                              disabled={isCustomPromptProcessing || !customPromptText.trim()}
-                              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 font-sans"
-                            >
-                              <Info size={14} />
-                              GENERATE SUGGESTIONS
-                            </button>
-                          </div>
+                      {/* WIN STRATEGY CHANGES NEEDED PANEL */}
+                      <div className="bg-[#080c16] border border-white/5 rounded-3xl p-6 flex flex-col gap-5 shadow-lg relative min-h-[300px]">
+                        <div className="absolute top-0 left-6 -translate-y-1/2 bg-[#092215] border border-emerald-500/20 px-3 py-1.5 rounded-full text-[9px] font-black text-emerald-400 uppercase tracking-widest font-sans flex items-center gap-1.5 shadow-md">
+                          <Check size={10} strokeWidth={3} className="text-emerald-400" />
+                          3. Drafting Changes & Win Tactics
+                        </div>
+
+                        <div className="space-y-4 mt-2 flex-1">
+                          {draftAnalysisReport.changesNeeded.map((change, idx) => (
+                            <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:border-emerald-500/20 transition-all duration-300 relative overflow-hidden">
+                              <div className="absolute -right-8 -bottom-8 w-16 h-16 bg-emerald-500/[0.02] blur-xl rounded-full pointer-events-none" />
+                              
+                              <h4 className="text-xs font-black text-emerald-400 font-sans tracking-wide mb-1.5 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {change.title}
+                              </h4>
+                              <div className="space-y-2 mt-2 leading-relaxed">
+                                <div className="text-[10.5px] text-slate-300 font-sans">
+                                  <span className="font-bold text-slate-500 block text-[9px] font-black uppercase tracking-widest font-sans leading-none mb-1">STRATEGIC CLAUSE ADJUSTMENT:</span>
+                                  {change.instruction}
+                                </div>
+                                <div className="text-[10px] text-emerald-400 font-sans">
+                                  <span className="text-slate-500 font-bold font-sans uppercase text-[8px] tracking-wider block">JUDICIAL VALUE / PAYOFF:</span>
+                                  {change.impact}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Case Synthesis Memorandum Card */}
+                  <div className="bg-[#0b1224]/80 border border-indigo-500/10 rounded-2xl p-6 relative overflow-hidden text-slate-300">
+                    <div className="absolute -top-10 -left-10 w-32 h-32 bg-indigo-500/5 blur-3xl rounded-full pointer-events-none" />
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles size={14} className="text-indigo-400" />
+                      <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Strategic Advocate Synthesis Memo</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                      Under Indian Civil and Appellate Procedure, standard declarations and temporary relief mechanisms favor the vigilant and possessive. 
+                      Ensure your Draft Pleading addresses: immediate physical possession with dates, clear boundary dimensions in the description schedule, 
+                      and immediate oral objections to establish non-acquiescence. Click any of the analysis tasks above to refine your draft in real-time.
+                    </p>
                   </div>
-                )}
+                </div>
+
+                {/* Overlays / Modal Windows */}
+                {/* showCustomPromptPage modal moved to secure global stacking context at the bottom of the file */}
 
                 {/* 2. EnlargedElement Overlay Modal */}
                 {enlargedElement && (
-                  <div className="fixed inset-0 bg-[#02050a]/95 backdrop-blur-md z-[700] flex flex-col p-6">
+                  <div className="fixed inset-0 bg-[#02050a]/95 backdrop-blur-md z-[2000] flex flex-col p-6">
                     <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col h-full bg-[#090e18] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
                       <div className="p-8 border-b border-white/5 flex justify-between items-center shrink-0">
                         <div>
@@ -3786,7 +4988,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
 
                 {/* Enlarge Document Modal Overlay */}
                 {isPreviewEnlarged && (
-                  <div className="fixed inset-0 z-[1000] bg-[#02050a]/95 backdrop-blur-md p-6 flex flex-col">
+                  <div className="fixed inset-0 z-[2000] bg-[#02050a]/95 backdrop-blur-md p-6 flex flex-col">
                     <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col h-full bg-[#090e18] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
                       <div className="p-8 border-b border-white/5 flex justify-between items-center shrink-0">
                         <div>
@@ -4407,22 +5609,7 @@ Please provide an extremely precise, professional, and well-organized legal resp
                       </button>
                     </div>
 
-                    {/* COMPACT CAMERA VIEW (Only if camera is enabled) */}
-                    {cameraEnabled && (
-                      <div className="w-full aspect-video rounded-xl overflow-hidden border border-indigo-500/20 bg-black relative shadow-lg animate-in zoom-in-95 duration-300 z-10">
-                        <video 
-                          ref={videoRef} 
-                          autoPlay 
-                          playsInline 
-                          muted 
-                          className="w-full h-full object-cover grayscale-[0.1] focus:outline-none" 
-                        />
-                        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded border border-white/10 flex items-center gap-1 select-none">
-                          <span className="w-1 h-1 bg-rose-500 rounded-full animate-pulse" />
-                          <span className="text-[7px] font-black uppercase tracking-widest text-slate-300">Sight Stream</span>
-                        </div>
-                      </div>
-                    )}
+                    {/* COMPACT CAMERA VIEW REMOVED - KEEPING LARGE CAMERA IN CURRENT WORKSPACE PANELS */}
 
                     {/* GRAPHIC INDICATOR: VoiceVisualizer */}
                     <div className="w-full flex items-center justify-center py-1 z-10 select-none">
@@ -4541,6 +5728,298 @@ Please provide an extremely precise, professional, and well-organized legal resp
           </div>
         </main>
       </div>
+
+      {/* GLOBAL OVERLAY MODAL: Custom Drafting Prompts */}
+      {showCustomPromptPage && (
+        <div className="fixed inset-0 bg-[#02050a]/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4 overflow-y-auto custom-scrollbar">
+          <div className="bg-[#090e18] border border-white/10 rounded-[2rem] w-full max-w-4xl h-auto max-h-[95vh] flex flex-col overflow-y-auto scroll-smooth shadow-2xl my-auto custom-scrollbar relative p-1">
+            
+            {/* Header Area */}
+            <div className="p-6 sm:p-8 border-b border-white/5 flex justify-between items-center shrink-0">
+              <div>
+                <span className="text-[9px] font-black tracking-widest text-[#818cf8] uppercase block mb-1">PROMPT WORKSPACE & CASE ANALYZERS</span>
+                <h3 className="text-lg font-black uppercase tracking-wider text-white font-sans">Custom Drafting Prompts & Win Strategy Suite</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 font-sans">Configure advanced structural layout rules & view litigation diagnostics below</p>
+              </div>
+              <button onClick={() => setShowCustomPromptPage(false)} className="p-2 text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* PAGE 1: Custom Prompt & Directives Setup */}
+            <div className="flex flex-col md:flex-row min-h-0 border-b border-white/5">
+              {/* Preset Directives Left Panel */}
+              <div className="w-full md:w-80 border-r border-white/5 flex flex-col bg-black/15 overflow-hidden">
+                <div className="p-4 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400 block font-sans">Directive Blueprints (1-Click Presets)</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 max-h-[420px] space-y-2.5 custom-scrollbar">
+                  {/* Preloaded Presets */}
+                  {systemDirectives.map((preset, idx) => {
+                    const isActive = customPromptText === preset.text;
+                    return (
+                      <div
+                        key={`static-${idx}`}
+                        onClick={() => setCustomPromptText(preset.text)}
+                        className={`w-full rounded-xl transition-all p-3 text-xs border cursor-pointer ${
+                          isActive 
+                            ? 'bg-indigo-600/15 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)]' 
+                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-indigo-500/30'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-1 gap-2">
+                          <span className={`font-bold flex-1 text-left font-sans ${isActive ? 'text-indigo-300' : 'text-slate-400'}`}>
+                            {preset.label}
+                          </span>
+                          {isActive && (
+                            <span className="text-[8px] bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded text-indigo-400 font-black font-sans shrink-0">
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[10px] line-clamp-2 text-left font-sans ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>{preset.text}</p>
+                      </div>
+                    );
+                  })}
+
+                  {/* User Custom Created presets */}
+                  {customDirectives.map((preset, idx) => {
+                    const isActive = customPromptText === preset.prompt;
+                    return (
+                      <div
+                        key={`custom-${idx}`}
+                        className={`w-full rounded-xl transition-all p-3 text-xs border ${
+                          isActive 
+                            ? 'bg-indigo-600/15 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)]' 
+                            : 'bg-indigo-950/20 border-white/5 hover:bg-indigo-950/30 hover:border-indigo-500/30'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-1 gap-2">
+                          <button
+                            onClick={() => setCustomPromptText(preset.prompt)}
+                            className={`text-left font-bold flex-1 font-sans ${isActive ? 'text-indigo-300 font-extrabold' : 'text-emerald-400 hover:text-emerald-300'}`}
+                          >
+                            {preset.name}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updated = customDirectives.filter((_, i) => i !== idx);
+                              saveCustomDirectives(updated);
+                            }}
+                            className="text-slate-500 hover:text-red-400 p-0.5 transition-colors cursor-pointer"
+                            title="Delete custom preset"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => setCustomPromptText(preset.prompt)}
+                          className={`w-full text-left font-sans line-clamp-2 text-[10px] ${isActive ? 'text-slate-200' : 'text-slate-400'}`}
+                        >
+                          {preset.prompt}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Interactive Editor Right Panel */}
+              <div className="flex-1 p-6 md:p-8 flex flex-col h-auto overflow-y-auto max-h-[500px] custom-scrollbar">
+                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2 font-sans">Configure Custom Pleading Logic Instruction</label>
+                <textarea 
+                  value={customPromptText}
+                  onChange={e => setCustomPromptText(e.target.value)}
+                  placeholder="e.g., Rewrite the case draft to strongly highlight the lack of initial dynamic intention in the sequential occurrence of events..."
+                  className="w-full h-44 bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none transition-colors resize-none font-sans"
+                />
+
+                {/* Quick Custom Directive Creator */}
+                <div className="mt-5 border-t border-white/5 pt-5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2.5 font-sans">Save Prompt Draft as a Preset</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-1">
+                    <input 
+                      value={newDirectiveName} 
+                      onChange={e => setNewDirectiveName(e.target.value)} 
+                      placeholder="Preset ID Name (e.g. Criminal Bail)" 
+                      className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans" 
+                    />
+                    <button 
+                      onClick={() => {
+                        if (!newDirectiveName.trim() || !customPromptText.trim()) return;
+                        const updated = [...customDirectives, { name: newDirectiveName.trim(), prompt: customPromptText.trim() }];
+                        saveCustomDirectives(updated);
+                        setNewDirectiveName('');
+                      }}
+                      disabled={!newDirectiveName.trim() || !customPromptText.trim()}
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer font-sans"
+                    >
+                      SAVE PRESET
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-6 border-t border-white/5 pt-5 flex flex-col md:flex-row gap-3 pb-2">
+                  <button
+                    onClick={() => {
+                      handleCustomPromptDrafting('draft');
+                      setShowCustomPromptPage(false);
+                    }}
+                    disabled={isCustomPromptProcessing || !customPromptText.trim()}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 font-sans"
+                  >
+                    <Zap size={14} />
+                    DRAFT CASE (WRITING PAD)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleCustomPromptDrafting('suggestions');
+                      setShowCustomPromptPage(false);
+                    }}
+                    disabled={isCustomPromptProcessing || !customPromptText.trim()}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 font-sans"
+                  >
+                    <Info size={14} />
+                    GENERATE SUGGESTIONS
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Strategic Page Navigation Indicator / Header for Page 2 */}
+            <div className="border-b border-indigo-500/10 py-4 bg-[#050811] px-8 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 font-sans">
+                  PAGE 2: LIVE LITIGATION ANALYSIS & ACTION WIN REPORT
+                </span>
+              </div>
+              <span className="text-[9px] text-[#818cf8] font-bold uppercase tracking-widest font-sans animate-bounce">
+                ▼ SCROLL DOWN TO READ AUDIT
+              </span>
+            </div>
+
+            {/* PAGE 2: LITIGATION INTELLIGENCE REPORT */}
+            <div className="bg-[#050811] p-6 sm:p-8 space-y-8 text-left font-sans shrink-0">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/[0.01] border border-white/5 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-2xl rounded-full pointer-events-none" />
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#818cf8] font-sans">DOCKET INSIGHT WORKSPACE</span>
+                  </div>
+                  <h4 className="text-sm font-black uppercase text-white tracking-wide font-sans">Litigation Blueprint, Hostile Pitfalls & Win Strategy</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 font-sans leading-relaxed">
+                    Dynamic strategic diagnostic extracted from current case facts. View legal sections, defense risk parameters, and apply structural improvements directly with 1-click.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleGenerateCaseAnalysis(draftFacts)}
+                  disabled={isGeneratingAnalysis || !draftFacts.trim()}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-lg font-black text-[9px] text-white uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(99,102,241,0.2)] flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 font-sans"
+                >
+                  {isGeneratingAnalysis ? (
+                    <RotateCcw size={12} className="animate-spin" />
+                  ) : (
+                    <Cpu size={12} />
+                  )}
+                  {isGeneratingAnalysis ? "RUNNING INTEGRATION AUDIT..." : "RE-GENERATED CASE AUDIT"}
+                </button>
+              </div>
+
+              {isGeneratingAnalysis ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-2.5 bg-white/[0.01] border border-white/5 rounded-2xl">
+                  <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="text-[9px] font-black tracking-widest text-[#818cf8] animate-pulse font-sans">LAUNCHING NEURAL LAWSUIT AUDIT & STRATEGY SYNOPSIS...</div>
+                  <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Compiling court strategies & civil pleading criteria</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Laws column */}
+                  <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 flex flex-col gap-4 relative overflow-hidden">
+                    <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest font-sans flex items-center gap-1.5 border-b border-white/5 pb-2">
+                      <BookOpen size={10} />
+                      1. Laws Involved
+                    </div>
+                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar">
+                      {draftAnalysisReport.lawsInvolved.map((law, idx) => (
+                        <div key={idx} className="bg-white/[0.01] border border-white/5 rounded-xl p-3.5 hover:border-indigo-500/10 transition-all">
+                          <div className="flex flex-col gap-1 mb-1.5">
+                            <span className="text-[10px] font-bold text-slate-200 uppercase font-sans leading-tight">{law.title}</span>
+                            <span className="px-1.5 py-0.5 self-start rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold text-[7px] font-sans uppercase tracking-wider">{law.provision}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed font-sans">{law.relevance}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Challenges column */}
+                  <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 flex flex-col gap-4 relative overflow-hidden">
+                    <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest font-sans flex items-center gap-1.5 border-b border-white/5 pb-2">
+                      <AlertTriangle size={10} />
+                      2. Legal Challenges
+                    </div>
+                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar">
+                      {draftAnalysisReport.challenges.map((challenge, idx) => (
+                        <div key={idx} className="bg-white/[0.01] border border-white/5 rounded-xl p-3.5 hover:border-orange-500/10 transition-all">
+                          <h5 className="text-[10px] font-black text-orange-400 font-sans tracking-wide mb-1 leading-snug">{challenge.title}</h5>
+                          <div className="space-y-2 mt-2">
+                            <div className="bg-orange-500/[0.02] border-l border-orange-500/15 pl-2 py-0.5">
+                              <span className="text-[8px] font-bold uppercase text-orange-400 tracking-wider block font-sans">Technical Risk</span>
+                              <p className="text-[9px] text-slate-400 leading-normal font-sans">{challenge.risk}</p>
+                            </div>
+                            <div className="bg-emerald-500/[0.02] border-l border-emerald-500/15 pl-2 py-0.5">
+                              <span className="text-[8px] font-bold uppercase text-emerald-400 tracking-wider block font-sans">Strategic Mitigation</span>
+                              <p className="text-[9px] text-slate-400 leading-normal font-sans">{challenge.mitigation}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Win Tactics column */}
+                  <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 flex flex-col gap-4 relative overflow-hidden">
+                    <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest font-sans flex items-center gap-1.5 border-b border-white/5 pb-2">
+                      <Check size={10} strokeWidth={3} />
+                      3. Win Strategy Tactic
+                    </div>
+                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar">
+                      {draftAnalysisReport.changesNeeded.map((change, idx) => (
+                        <div key={idx} className="bg-white/[0.01] border border-white/5 rounded-xl p-3.5 hover:border-emerald-500/10 transition-all flex flex-col justify-between">
+                          <div>
+                            <h5 className="text-[10px] font-black text-emerald-400 font-sans tracking-wide mb-1.5 leading-snug">{change.title}</h5>
+                            <p className="text-[9.5px] text-slate-300 font-sans leading-relaxed">
+                              <span className="text-slate-500 font-bold block text-[8px] font-sans uppercase tracking-widest mb-0.5">INSTRUCTION:</span>
+                              {change.instruction}
+                            </p>
+                            <p className="text-[9px] text-emerald-450 font-sans leading-relaxed mt-1.5">
+                              <span className="text-slate-500 font-bold block text-[8px] font-sans uppercase tracking-wider mb-0.5">IMPACT ON JUDGE:</span>
+                              {change.impact}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const newText = customPromptText ? (customPromptText + "\n\n" + change.instruction) : change.instruction;
+                              setCustomPromptText(newText);
+                              // Smooth scroll up to Page 1 Prompt Text Area focus
+                              document.querySelector("textarea")?.scrollIntoView({ behavior: "smooth" });
+                            }}
+                            className="mt-3.5 w-full py-1.5 bg-indigo-600/15 border border-indigo-500/20 hover:bg-indigo-600/35 text-indigo-300 hover:text-white rounded text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer font-sans"
+                          >
+                            + APPLY TACTIC TO PROMPT
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .hardware-dock-center {
